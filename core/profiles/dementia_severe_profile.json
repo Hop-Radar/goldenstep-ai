@@ -1,0 +1,14 @@
+{
+    "domain": "DEMENTIA_SEVERE",
+    "base_speed_kmh": 2.40,
+    "fatigue_lambda": 0.30,
+    "category_weights": {
+        "CONVENIENCE_STORE": 1.9,
+        "SUBWAY_STATION": 1.7,
+        "PARK": 1.6,
+        "BUS_STOP": 1.4,
+        "REST_SHELTER": 1.5,
+        "BENCH_REST": 1.2,
+        "BAKERY": 1.3
+    }
+}

@@ -1,0 +1,23 @@
+
+# Environments
+.env
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Data & Output Files
+data/networks/*.graphml
+data/pois/*.parquet
+data/pois/*.geojson
+data/raw_buildings/
+cache/
+*.geojson
+*.html
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE Settings
+.vscode/

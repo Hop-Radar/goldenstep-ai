@@ -2,6 +2,7 @@
 api/schemas.py
 - GoldenStep API Request/Response Pydantic 스키마 정의
 - 기획서 명세 및 mock_search_request.json / mock_search_response.json 100% 호환
+- [확장] PriorityPoint에 거점 중심 반경별 존재 확률(100m, 300m, 500m) 및 통계적 신뢰도 스키마 추가
 """
 
 from typing import List, Dict, Any, Optional
@@ -74,6 +75,27 @@ class DeepLinks(BaseModel):
     kakao_map: Optional[str] = None
 
 
+# ==================== [신규 확장: 확률 및 신뢰도 분석 스키마] ====================
+
+class RangeProbabilities(BaseModel):
+    within_100m: float = Field(..., description="거점 반경 100m 이내 실종자 체류 확률 (0.0~1.0)")
+    within_300m: float = Field(..., description="거점 반경 300m 이내 실종자 체류 확률 (0.0~1.0)")
+    within_500m: float = Field(..., description="거점 반경 500m 이내 실종자 체류 확률 (0.0~1.0)")
+
+
+class ConfidenceStats(BaseModel):
+    confidence_level: float = Field(default=0.95, description="모비율 추정 통계적 신뢰수준 (기본 0.95)")
+    margin_of_error_pct: float = Field(..., description="300m 기준 95% 신뢰구간 표본 오차 범위 (±%)")
+    dispersion_grade: str = Field(..., description="에이전트 공간 수렴도 (HIGH, MODERATE, LOW)")
+    sample_size: int = Field(default=settings.NUM_SIMULATION_AGENTS, description="시뮬레이션 가상 에이전트 표본 수")
+
+
+class ProbabilityAnalysis(BaseModel):
+    relative_priority_prob: float = Field(..., description="Top-3 거점 간 상대적 우선 선택 확률")
+    range_probabilities: RangeProbabilities
+    confidence: ConfidenceStats
+
+
 class PriorityPoint(BaseModel):
     rank: int
     poi_id: str
@@ -82,6 +104,7 @@ class PriorityPoint(BaseModel):
     location: POILocation
     distance_m: Optional[float] = Field(None, description="실종 지점 기준 도보 거리(m)")
     score: float
+    probability_analysis: Optional[ProbabilityAnalysis] = Field(None, description="거점 기준 반경별 존재 확률 및 신뢰도")
     recommendation_reason: str
     deep_links: DeepLinks
 

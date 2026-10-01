@@ -3,10 +3,10 @@ main.py
 - GoldenStep Core AI Simulation API Server
 - 엔드포인트: POST /api/v1/simulation/search (BE 연동 표준 규격)
 - FastAPI Lifespan을 통한 도로망(Graph) 및 POI R-Tree 인메모리 사전 적재 (SLA < 0.5초)
-- [수정 완료] 코어 엔진 인터페이스 동기화:
-    1. isochrone_engine.py에서 피로 감쇠(fatigue_lambda) 제거 반영
-    2. 시뮬레이터(A3) 선행 실행 후 edge_visit_counts를 POI 랭커로 전달하여 권역 내부 거점 선별
-    3. 하드코딩된 category_weights 제거 및 궤적 밀도 기반 TOP 3 거점 도출
+- [연동 완료]
+    1. 시뮬레이터 실행 결과에서 stopped_points 추출 후 POI 랭커로 전달
+    2. 거점별 100m, 300m, 500m 존재 확률 및 95% 신뢰도 오차범위 DTO 조립
+    3. 네이버/카카오 지도 도보 길찾기 외부 딥링크 및 추천 사유 연계
 """
 
 import time
@@ -30,6 +30,9 @@ from api.schemas import (
     PriorityPoint,
     POILocation,
     DeepLinks,
+    ProbabilityAnalysis,
+    RangeProbabilities,
+    ConfidenceStats,
     HighProbabilityEdgesCollection,
     HighProbabilityEdgeFeature
 )
@@ -112,6 +115,7 @@ def health_check():
         }
     )
 
+
 @app.post(
     "/api/v1/simulation/search",
     response_model=SearchSimulationResponse,
@@ -125,7 +129,8 @@ def predict_simulation(request: SearchSimulationRequest):
     1. 보행 네트워크 기반 도달 권역(A1/A2 Isochrone Polygon) 산출
     2. 몬테카를로 에이전트 2,000명 시뮬레이션 및 실제 이동 궤적(A3) 도로망 추출
     3. 통과 궤적 밀도와 공간 인접도를 결합하여 권역 내부 유력 거점 TOP 3 선별
-    4. 거점 중심 300m 회랑 및 네이버/카카오 지도 도보 길찾기 외부 딥링크 생성
+    4. 거점 기준 반경별(100m, 300m, 500m) 존재 확률 및 95% 신뢰구간 표본 오차 산출
+    5. 거점 중심 300m 회랑 및 네이버/카카오 지도 도보 길찾기 외부 딥링크 생성
     """
     start_perf = time.perf_counter()
     
@@ -149,7 +154,7 @@ def predict_simulation(request: SearchSimulationRequest):
         agent_count = request.parameters.num_agents if request.parameters else settings.NUM_SIMULATION_AGENTS
 
         # -------------------------------------------------------------
-        # 1. 보행 도로망 도달 권역(A1/A2 Isochrone) 계산 (fatigue_lambda 제거)
+        # 1. 보행 도로망 도달 권역(A1/A2 Isochrone) 계산
         # -------------------------------------------------------------
         iso_feature = iso_engine.calculate_isochrone(
             center_lat=lat, 
@@ -161,7 +166,7 @@ def predict_simulation(request: SearchSimulationRequest):
         iso_props = iso_feature["properties"]
 
         # -------------------------------------------------------------
-        # 2. 몬테카를로 시뮬레이션 선행 실행 (에이전트 통과 도로망 A3 추출)
+        # 2. 몬테카를로 시뮬레이션 선행 실행 (에이전트 통과 도로망 A3 및 최종 정지점 추출)
         # -------------------------------------------------------------
         sim_result = simulator.simulate(
             center_lat=lat,
@@ -175,9 +180,10 @@ def predict_simulation(request: SearchSimulationRequest):
         )
         edge_visit_counts = sim_result.get("edge_visit_counts", {})
         agents = sim_result.get("agents", [])
+        stopped_points = sim_result.get("stopped_points", [])
 
         # -------------------------------------------------------------
-        # 3. 에이전트 궤적 밀도 기반 POI 랭킹 연동 (권역 내부 시설 선별)
+        # 3. 에이전트 궤적 및 정지점 기반 POI 랭킹 및 존재 확률 연산
         # -------------------------------------------------------------
         raw_pois = poi_engine.rank_points_of_interest(
             boundary_polygon=boundary_polygon,
@@ -185,6 +191,7 @@ def predict_simulation(request: SearchSimulationRequest):
             origin_lon=lon,
             edge_visit_counts=edge_visit_counts,
             terminal_edge_counts=sim_result.get("terminal_edge_counts", {}),
+            stopped_points=stopped_points,
             graph=simulator.graph,
             top_k=3
         )
@@ -214,26 +221,50 @@ def predict_simulation(request: SearchSimulationRequest):
             features=edge_feature_list
         )
 
-        # 5. PriorityPoint DTO 조립
-        priority_point_list = [
-            PriorityPoint(
-                rank=p["rank"],
-                poi_id=p["poi_id"],
-                name=p["name"],
-                category=p["category"],
-                location=POILocation(lat=p["location"]["lat"], lon=p["location"]["lon"]),
-                distance_m=p.get("distance_m"),
-                score=p["score"],
-                recommendation_reason=p["recommendation_reason"],
-                deep_links=DeepLinks(
-                    naver_map=p["deep_links"]["naver_map"],
-                    kakao_map=p["deep_links"]["kakao_map"]
+        # -------------------------------------------------------------
+        # 5. PriorityPoint DTO 조립 (확률 및 신뢰도 매핑)
+        # -------------------------------------------------------------
+        priority_point_list = []
+        for p in raw_pois:
+            pa_raw = p.get("probability_analysis")
+            pa_dto = None
+            if pa_raw:
+                pa_dto = ProbabilityAnalysis(
+                    relative_priority_prob=pa_raw["relative_priority_prob"],
+                    range_probabilities=RangeProbabilities(
+                        within_100m=pa_raw["range_probabilities"]["within_100m"],
+                        within_300m=pa_raw["range_probabilities"]["within_300m"],
+                        within_500m=pa_raw["range_probabilities"]["within_500m"]
+                    ),
+                    confidence=ConfidenceStats(
+                        confidence_level=pa_raw["confidence"]["confidence_level"],
+                        margin_of_error_pct=pa_raw["confidence"]["margin_of_error_pct"],
+                        dispersion_grade=pa_raw["confidence"]["dispersion_grade"],
+                        sample_size=pa_raw["confidence"]["sample_size"]
+                    )
+                )
+
+            priority_point_list.append(
+                PriorityPoint(
+                    rank=p["rank"],
+                    poi_id=p["poi_id"],
+                    name=p["name"],
+                    category=p["category"],
+                    location=POILocation(lat=p["location"]["lat"], lon=p["location"]["lon"]),
+                    distance_m=p.get("distance_m"),
+                    score=p["score"],
+                    probability_analysis=pa_dto,
+                    recommendation_reason=p["recommendation_reason"],
+                    deep_links=DeepLinks(
+                        naver_map=p["deep_links"]["naver_map"],
+                        kakao_map=p["deep_links"]["kakao_map"]
+                    )
                 )
             )
-            for p in raw_pois
-        ]
 
+        # -------------------------------------------------------------
         # 6. 신뢰도 등급 산정
+        # -------------------------------------------------------------
         if elapsed_h <= 1.5:
             reliability = "STABLE"
             warning_msg = None
@@ -244,7 +275,9 @@ def predict_simulation(request: SearchSimulationRequest):
             reliability = "REFERENCE"
             warning_msg = "실종 후 3시간 이상 경과하여 보행 예측 신뢰도가 낮습니다. 112 긴급 신고를 병행하십시오."
 
+        # -------------------------------------------------------------
         # 7. 요약 통계(Summary) 생성
+        # -------------------------------------------------------------
         summary = SimulationSummary(
             person_type=mp.person_type,
             base_velocity_kmh=base_speed,
@@ -255,7 +288,9 @@ def predict_simulation(request: SearchSimulationRequest):
             area_reduction_rate=float(iso_props["area_reduction_rate_a2"].replace("%", ""))
         )
 
+        # -------------------------------------------------------------
         # 8. FeatureCollection 래핑
+        # -------------------------------------------------------------
         boundary_collection = BoundaryZoneCollection(
             features=[
                 BoundaryFeature(

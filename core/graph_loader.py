@@ -3,10 +3,12 @@ core/graph_loader.py
 - GoldenStep Core Engine: 서울특별시 전역(25개 자치구) 보행 도로망 추출, 정제, 캐싱 모듈
 - 기준: Seoul, South Korea (약 605 km²)
 - 노드/엣지 속성 정규화 및 계단(highway=steps) 가중치 0.05 부여
+- [성능 최적화] 엣지 절대 방위각(bearing) 및 Tobler 상대비용(relative_cost) 사전 계산 캐싱 주입
 """
 
 import os
 import time
+import math
 import logging
 import networkx as nx
 import osmnx as ox
@@ -93,7 +95,7 @@ class WalkGraphManager:
             f"서울 전역 다운로드 완료 ({time.time() - start_time:.2f}초 소요) - 노드: {len(G.nodes):,}개, 엣지: {len(G.edges):,}개"
         )
 
-        # 도로 설계 정규화 및 계단 가중치 주입
+        # 도로 설계 정규화 및 계단 가중치 주입 + 고정 속성 사전 계산
         self._preprocess_edges(G)
 
         # 최대 연결 컴포넌트 추출 (단절 파편 제거)
@@ -114,13 +116,30 @@ class WalkGraphManager:
 
         start_time = time.time()
         G = ox.load_graphml(filepath=self.cache_path)
+        
+        # 캐시에서 로드한 뒤 사전 계산 속성(bearing, relative_cost) 유무 확인 및 보강
+        self._preprocess_edges(G)
+
         logger.info(
             f"그래프 메모리 로드 완료 ({time.time() - start_time:.2f}초 소요 - 노드: {len(G.nodes):,}개, 엣지: {len(G.edges):,}개)"
         )
         return G
 
+    def _calculate_edge_bearing(self, p1: tuple, p2: tuple) -> float:
+        """두 점 사이의 절대 방위각(0~360도) 계산"""
+        lon1, lat1 = p1
+        lon2, lat2 = p2
+        dLon = math.radians(lon2 - lon1)
+        lat1 = math.radians(lat1)
+        lat2 = math.radians(lat2)
+
+        y = math.sin(dLon) * math.cos(lat2)
+        x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon)
+        brng = math.degrees(math.atan2(y, x))
+        return (brng + 360) % 360
+
     def _preprocess_edges(self, G: nx.MultiDiGraph) -> None:
-        """도로 경계망 정규화 가중치(norm_width) 주입 및 결측 길이 보정"""
+        """도로 경계망 정규화 가중치, 결측 길이 보정 및 사전 고정 속성(방위각, 상대비용) 주입"""
         for u, v, k, data in G.edges(keys=True, data=True):
             hw_type = data.get("highway", "residential")
             if isinstance(hw_type, list):
@@ -133,10 +152,21 @@ class WalkGraphManager:
             else:
                 data["length"] = float(data["length"])
 
-    def _clean_isolated_components(self, G: nx.MultiDiGraph) -> nx.MultiDiGraph:
-        """단절된 고립 노드 제거"""
-        largest_cc = max(nx.weakly_connected_components(G), key=len)
-        return G.subgraph(largest_cc).copy()
+            grade = float(data.get("grade", 0.0))
+            data["grade"] = grade
+
+            # [성능 최적화 1] 절대 방위각(bearing) 사전 계산
+            if "bearing" not in data:
+                u_node = G.nodes[u]
+                v_node = G.nodes[v]
+                data["bearing"] = self._calculate_edge_bearing(
+                    (u_node["x"], u_node["y"]),
+                    (v_node["x"], v_node["y"])
+                )
+
+            # [성능 최적화 2] Tobler 기반 상대 이동 비용(relative_cost) 사전 계산
+            if "relative_cost" not in data:
+                data["relative_cost"] = (data["length"] / 10.0) * math.exp(3.50 * abs(grade + 0.05))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ core/agent_simulator.py
 - 다항 로짓 기반 갈림길 의사결정 (직진성 S_ij, 도로폭 W_j, Tobler 상대비용 결합)
 - [수정] 스텝별 조기 정지(Early Stop) 주사위 폐기 -> 목표 시간까지 충실 이동 (Go until stuck)
 - [수정] 에이전트 최종 체류/도달 도로(terminal_edge_counts) 신규 집계 및 반환
+- [성능 최적화] API 서빙 시 return_polygon=False로 A3 unary_union 생략 지원
+- [성능 최적화] extract_poi_corridors 내 edge_visit_counts 재사용 및 MultiDiGraph 가중치 버그 수정
 """
 
 import math
@@ -82,10 +84,13 @@ class MultiTypeRandomWalkSimulator:
         base_speed: float = None,
         beta_dp: float = 1.0,
         beta_cost: float = 1.0,
-        beta_wid: float = 1.0
+        beta_wid: float = 1.0,
+        return_polygon: bool = False
     ) -> Dict[str, Any]:
         """
         몬테카를로 에이전트 주행 및 누적 통과 도로망(A3), 최종 체류 도로 산출
+        :param return_polygon: False일 경우 main.py API 서빙용(A3 다각형 unary_union 생략),
+                               True일 경우 run_v3_validation 정밀 채점용 A3 다각형 생성
         """
         num_agents = num_agents or settings.NUM_SIMULATION_AGENTS
         base_speed = base_speed or settings.BASE_WALK_VELOCITY_KMH
@@ -121,17 +126,23 @@ class MultiTypeRandomWalkSimulator:
                     edge_dict = self.graph.get_edge_data(u, v)
                     edge_data = next(iter(edge_dict.values())) if isinstance(edge_dict, dict) and edge_dict else {}
                     
-                    length_m = float(edge_data.get("length", 10.0))
-                    grade = float(edge_data.get("grade", 0.0))
                     norm_width = float(edge_data.get("norm_width", 0.5))
                     
-                    # 피처 1: 직진 코사인 유사도
-                    edge_bearing = self._calculate_bearing(u_coord, v_coord)
+                    # 피처 1: 직진 코사인 유사도 (사전 계산된 bearing 우선 활용)
+                    if "bearing" in edge_data:
+                        edge_bearing = edge_data["bearing"]
+                    else:
+                        edge_bearing = self._calculate_bearing(u_coord, v_coord)
                     angle_diff = self._angle_difference(agent.target_heading, edge_bearing)
                     s_ij = math.cos(math.radians(angle_diff))
                     
-                    # 피처 2: Tobler 기반 상대 이동 비용
-                    relative_cost = (length_m / 10.0) * math.exp(3.50 * abs(grade + 0.05))
+                    # 피처 2: Tobler 기반 상대 이동 비용 (사전 계산된 relative_cost 우선 활용)
+                    if "relative_cost" in edge_data:
+                        relative_cost = edge_data["relative_cost"]
+                    else:
+                        length_m = float(edge_data.get("length", 10.0))
+                        grade = float(edge_data.get("grade", 0.0))
+                        relative_cost = (length_m / 10.0) * math.exp(3.50 * abs(grade + 0.05))
                     
                     # 피처 3: 백트래킹 페널티
                     reversal_penalty = 2.0 if (v == agent.previous_node and len(successors) > 1) else 0.0
@@ -160,7 +171,10 @@ class MultiTypeRandomWalkSimulator:
                 time_spent = (length_m / 1000.0) / step_speed
                 agent.elapsed_hours += time_spent
                 
-                chosen_bearing = self._calculate_bearing(u_coord, (self.graph.nodes[chosen_v]['x'], self.graph.nodes[chosen_v]['y']))
+                if "bearing" in chosen_edge:
+                    chosen_bearing = chosen_edge["bearing"]
+                else:
+                    chosen_bearing = self._calculate_bearing(u_coord, (self.graph.nodes[chosen_v]['x'], self.graph.nodes[chosen_v]['y']))
                 if self._angle_difference(agent.target_heading, chosen_bearing) > 45.0:
                     agent.accumulated_turns += 1
                     agent.update_heading(chosen_bearing)
@@ -178,8 +192,11 @@ class MultiTypeRandomWalkSimulator:
             
             stopped_points.append((self.graph.nodes[agent.current_node]['x'], self.graph.nodes[agent.current_node]['y']))
 
-        # A3 다각형 생성
-        a3_polygon, a3_area_km2 = self._generate_a3_polygon(edge_visit_counts)
+        # [성능 최적화] run_v3 요청 시에만 A3 다각형 unary_union 연산 실행, main.py에서는 생략
+        if return_polygon:
+            a3_polygon, a3_area_km2 = self._generate_a3_polygon(edge_visit_counts)
+        else:
+            a3_polygon, a3_area_km2 = Polygon(), 0.0
 
         return {
             "type": "Feature",
@@ -230,7 +247,8 @@ class MultiTypeRandomWalkSimulator:
         self,
         agents: List[Agent],
         top_pois: List[Dict[str, Any]],
-        radius_m: float = 200.0
+        radius_m: float = 200.0,
+        edge_popularity: Dict[Tuple[int, int], int] = None
     ) -> Dict[str, Any]:
         """
         [완결판] 출발지에서 우선순위 거점(TOP 1~3) 각각의 문앞까지 이어지는
@@ -242,13 +260,14 @@ class MultiTypeRandomWalkSimulator:
         start_node = agents[0].path[0]
         selected_edges: Dict[Tuple[int, int], Dict[str, Any]] = {}
 
-        # 1. 2,000명 에이전트 전체의 고유 통과 빈도 사전 맵 구축
-        edge_popularity: Dict[Tuple[int, int], int] = {}
-        for a in agents:
-            for i in range(len(a.path) - 1):
-                u, v = a.path[i], a.path[i + 1]
-                ek = (min(u, v), max(u, v))
-                edge_popularity[ek] = edge_popularity.get(ek, 0) + 1
+        # [성능 최적화] 전달된 edge_popularity(또는 edge_visit_counts)가 있으면 재순회 없이 즉시 사용
+        if edge_popularity is None:
+            edge_popularity = {}
+            for a in agents:
+                for i in range(len(a.path) - 1):
+                    u, v = a.path[i], a.path[i + 1]
+                    ek = (min(u, v), max(u, v))
+                    edge_popularity[ek] = edge_popularity.get(ek, 0) + 1
 
         # 2. 각 거점(Rank 1, 2, 3)별로 출발지 -> 거점 문앞까지의 '연속 경로' 직접 연결
         for poi in top_pois:
@@ -277,14 +296,19 @@ class MultiTypeRandomWalkSimulator:
 
             # [핵심] 출발지 -> 거점 진입 노드까지의 끊김 없는 연속 실선 추출
             if closest_node and nx.has_path(self.graph, start_node, closest_node):
-                # 에이전트 통과 빈도를 반영한 최적 보행 축선 경로 산출
+                # [버그 수정] MultiDiGraph 간선 딕셔너리 구조에서 실제 도로 길이를 정상 조회
+                def _corridor_edge_weight(u, v, d):
+                    edge_data = next(iter(d.values())) if isinstance(d, dict) and d else d
+                    length_val = float(edge_data.get("length", 10.0))
+                    pop = edge_popularity.get((min(u, v), max(u, v)), 0)
+                    return length_val / (1.0 + math.log1p(pop))
+
                 try:
-                    # 빈도가 높은 도로일수록 이동 가중치(cost)를 낮춰 에이전트 다수 통과로를 선택
                     path = nx.shortest_path(
                         self.graph, 
                         source=start_node, 
                         target=closest_node,
-                        weight=lambda u, v, d: float(d.get("length", 10.0)) / (1.0 + math.log1p(edge_popularity.get((min(u, v), max(u, v)), 0)))
+                        weight=_corridor_edge_weight
                     )
                 except Exception:
                     path = nx.shortest_path(self.graph, source=start_node, target=closest_node, weight="length")

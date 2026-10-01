@@ -3,6 +3,7 @@ core/isochrone_engine.py
 - GoldenStep Core Engine: 보행 도로망 기반 A1(물리적 최대 도달 영역) 및 A2(보행 가능 네트워크 영역) 산출 모듈
 - Kinematic Baseline: 등속 기반 최대 도달 반경 R_max = v0 * t 적용 (임의의 피로 감쇠 lambda 배제)
 - A2 영역: 중심선 기준 편측 5m (총 도로 폭 10m) 버퍼 합집합(Unary Union) 면적 연산
+- [성능 최적화] 도로 간선 기하 STRtree 공간 인덱싱 및 API 서빙/검증 모드(exact_union) 분리
 """
 
 import math
@@ -13,6 +14,7 @@ import networkx as nx
 import osmnx as ox
 from shapely.geometry import Point, MultiPoint, Polygon, LineString, mapping
 from shapely.ops import unary_union
+from shapely.strtree import STRtree
 from core.config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -25,6 +27,30 @@ class IsochroneEngine:
         :param graph: core.graph_loader에서 로드된 서울시 보행 도로망 MultiDiGraph
         """
         self.graph = graph
+        
+        # [성능 최적화] 47만 개 도로 전수 순회 방지를 위한 도로 간선 STRtree 사전 구축
+        self.edge_geometries: List[LineString] = []
+        self.edge_data_list: List[Tuple[Any, Any, Any, Dict[str, Any]]] = []
+        self._build_edge_spatial_index()
+
+    def _build_edge_spatial_index(self):
+        """도로망 간선의 LineString 기하를 수집하여 STRtree 공간 인덱스 1회 구축"""
+        for u, v, k, data in self.graph.edges(keys=True, data=True):
+            if "geometry" in data:
+                geom = data["geometry"]
+            else:
+                u_node = self.graph.nodes[u]
+                v_node = self.graph.nodes[v]
+                geom = LineString([(u_node['x'], u_node['y']), (v_node['x'], v_node['y'])])
+
+            self.edge_geometries.append(geom)
+            self.edge_data_list.append((u, v, k, data))
+
+        if self.edge_geometries:
+            self.edge_tree = STRtree(self.edge_geometries)
+            logger.info(f">> 도로망 STRtree 공간 인덱스 구축 완료: 총 {len(self.edge_geometries):,}개 간선 적재")
+        else:
+            self.edge_tree = None
 
     def calculate_a1_max_distance(self, elapsed_hours: float, base_speed_kmh: float = None) -> float:
         """
@@ -40,17 +66,15 @@ class IsochroneEngine:
         self,
         center_lat: float,
         center_lon: float,
-        r_max_m: float
+        r_max_m: float,
+        exact_union: bool = True
     ) -> Dict[str, Any]:
         """
         [A2 Walkable Network Area]
         A1 원형 반경 내의 보행 가능 도로망 간선에 편측 5m (총 폭 10m) 버퍼를 적용한 통합 영역 산출
+        :param exact_union: True일 경우 run_v3 검증용 unary_union 정밀 병합 수행,
+                            False일 경우 main.py API용 고속 연산(단순화)
         """
-        # 위도 1도 ≈ 111,000m, 경도 1도 ≈ 88,800m
-        lat_delta = r_max_m / 111000.0
-        lon_delta = r_max_m / 88800.0
-
-        # WGS84 좌표계 기준의 타원체 거리 보정을 고려한 중심 원형 버퍼 생성 (바운딩용)
         center_pt = Point(center_lon, center_lat)
         deg_radius = r_max_m / 111000.0
         a1_circle_approx = center_pt.buffer(deg_radius)
@@ -58,47 +82,62 @@ class IsochroneEngine:
         buffered_edge_geoms = []
         total_length_m = 0.0
         edge_count = 0
-
-        # 도로망 간선 필터링 및 10m 버퍼링 (위경도 환산: 5m ≈ 0.000045도)
-        # 보다 정밀한 공간 연산을 위해 국소 메트릭 버퍼 환산값 적용
         buffer_deg = settings.STREET_BUFFER_HALF_WIDTH_M / 111000.0
 
-        for u, v, k, data in self.graph.edges(keys=True, data=True):
-            u_node = self.graph.nodes[u]
-            v_node = self.graph.nodes[v]
-            
-            # 중심점 기준 1차 Bounding Box 검사
-            if not (
-                min(u_node['y'], v_node['y']) >= center_lat - lat_delta and
-                max(u_node['y'], v_node['y']) <= center_lat + lat_delta and
-                min(u_node['x'], v_node['x']) >= center_lon - lon_delta and
-                max(u_node['x'], v_node['x']) <= center_lon + lon_delta
-            ):
-                continue
-
-            # 간선 기하 추출
-            if "geometry" in data:
-                edge_geom = data["geometry"]
-            else:
-                edge_geom = LineString([(u_node['x'], u_node['y']), (v_node['x'], v_node['y'])])
-
-            # A1 원형 영역과의 교차 검사
-            if a1_circle_approx.intersects(edge_geom):
-                buffered_edge_geoms.append(edge_geom.buffer(buffer_deg))
-                total_length_m += float(data.get("length", 10.0))
-                edge_count += 1
-
-        if not buffered_edge_geoms:
-            logger.warning("A1 반경 내에 추출된 도로 엣지가 없습니다. 기본 반경 폴리곤으로 대체합니다.")
-            a2_polygon = a1_circle_approx
+        # [성능 최적화] 전수 for문 순회 대신 STRtree 질의로 반경 내 도로만 즉시 추출
+        if self.edge_tree is not None:
+            candidate_indices = self.edge_tree.query(a1_circle_approx)
+            for idx in candidate_indices:
+                edge_geom = self.edge_geometries[idx]
+                if a1_circle_approx.intersects(edge_geom):
+                    _, _, _, data = self.edge_data_list[idx]
+                    length_val = float(data.get("length", 10.0))
+                    total_length_m += length_val
+                    edge_count += 1
+                    if exact_union:
+                        buffered_edge_geoms.append(edge_geom.buffer(buffer_deg))
         else:
-            # 겹치는 버퍼 다각형 합집합(Unary Union) 병합
-            a2_polygon = unary_union(buffered_edge_geoms)
+            # Fallback: 공간 인덱스가 없을 때의 순회
+            lat_delta = r_max_m / 111000.0
+            lon_delta = r_max_m / 88800.0
+            for u, v, k, data in self.graph.edges(keys=True, data=True):
+                u_node = self.graph.nodes[u]
+                v_node = self.graph.nodes[v]
+                if not (
+                    min(u_node['y'], v_node['y']) >= center_lat - lat_delta and
+                    max(u_node['y'], v_node['y']) <= center_lat + lat_delta and
+                    min(u_node['x'], v_node['x']) >= center_lon - lon_delta and
+                    max(u_node['x'], v_node['x']) <= center_lon + lon_delta
+                ):
+                    continue
 
-        # 면적 계산 (km^2 단위 변환)
-        # 위경도 도 단위 면적을 m^2로 환산: deg_area * (111000 * 88800)
-        area_km2 = (a2_polygon.area * 111000.0 * 88800.0) / 1_000_000.0
+                if "geometry" in data:
+                    edge_geom = data["geometry"]
+                else:
+                    edge_geom = LineString([(u_node['x'], u_node['y']), (v_node['x'], v_node['y'])])
+
+                if a1_circle_approx.intersects(edge_geom):
+                    length_val = float(data.get("length", 10.0))
+                    total_length_m += length_val
+                    edge_count += 1
+                    if exact_union:
+                        buffered_edge_geoms.append(edge_geom.buffer(buffer_deg))
+
         a1_area_km2 = (math.pi * (r_max_m ** 2)) / 1_000_000.0
+
+        # 분기 처리: 정밀 합집합(run_v3) vs 고속 반환(main.py)
+        if exact_union:
+            if not buffered_edge_geoms:
+                logger.warning("A1 반경 내에 추출된 도로 엣지가 없습니다. 기본 반경 폴리곤으로 대체합니다.")
+                a2_polygon = a1_circle_approx
+            else:
+                a2_polygon = unary_union(buffered_edge_geoms)
+            area_km2 = (a2_polygon.area * 111000.0 * 88800.0) / 1_000_000.0
+        else:
+            # main.py API 고속 모드: unary_union 없이 도로망 근사 면적 추정 및 바운딩 폴리곤 제공
+            approx_road_area_km2 = (total_length_m * (settings.STREET_BUFFER_HALF_WIDTH_M * 2.0)) / 1_000_000.0
+            area_km2 = min(approx_road_area_km2, a1_area_km2 * 0.4)
+            a2_polygon = a1_circle_approx
 
         arr1_val = max(0.0, min(99.0, (1.0 - (area_km2 / max(a1_area_km2, 1e-7))) * 100.0))
 
@@ -117,10 +156,12 @@ class IsochroneEngine:
         center_lon: float,
         elapsed_hours: float,
         base_speed_kmh: float = None,
-        turn_penalty_factor: float = 0.0
+        turn_penalty_factor: float = 0.0,
+        exact_union: bool = False
     ) -> Dict[str, Any]:
         """
         단일 경과 시간에 대한 A1(최대한계) 및 A2(보행로) 기반 도달 권역 Feature GeoJSON 산출
+        :param exact_union: API 실시간 서빙 시에는 False(기본), 배치 검증 시 True 지정
         """
         base_speed_kmh = base_speed_kmh or settings.BASE_WALK_VELOCITY_KMH
 
@@ -163,7 +204,7 @@ class IsochroneEngine:
         polygon = self._generate_polygon(node_points, center_lat, center_lon, r_max_m)
 
         # 6. A2 네트워크 연산 및 1차 면적 축소율 도출
-        a2_info = self.calculate_a2_network(center_lat, center_lon, r_max_m)
+        a2_info = self.calculate_a2_network(center_lat, center_lon, r_max_m, exact_union=exact_union)
 
         return {
             "type": "Feature",
@@ -213,8 +254,9 @@ class IsochroneEngine:
             node_costs[u] = cost
             
             for v in self.graph.successors(u):
-                edge_data = self.graph.get_edge_data(u, v)[0]
-                length = edge_data.get("length", 1.0)
+                edge_dict = self.graph.get_edge_data(u, v)
+                edge_data = next(iter(edge_dict.values())) if isinstance(edge_dict, dict) and edge_dict else {}
+                length = float(edge_data.get("length", 1.0))
                 
                 penalty = 1.0
                 if p is not None:

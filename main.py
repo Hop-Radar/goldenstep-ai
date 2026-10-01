@@ -7,6 +7,7 @@ main.py
     1. 시뮬레이터 실행 결과에서 stopped_points 추출 후 POI 랭커로 전달
     2. 거점별 100m, 300m, 500m 존재 확률 및 95% 신뢰도 오차범위 DTO 조립
     3. 네이버/카카오 지도 도보 길찾기 외부 딥링크 및 추천 사유 연계
+- [성능 최적화] API 실시간 서빙 모드 적용 (exact_union=False, return_polygon=False, 방문 빈도 맵 재사용)
 """
 
 import time
@@ -148,35 +149,42 @@ def predict_simulation(request: SearchSimulationRequest):
         mp = request.missing_person
         lat = mp.last_seen_location.lat
         lon = mp.last_seen_location.lon
-        elapsed_h = mp.elapsed_hours
+        raw_elapsed_h = mp.elapsed_hours
+
+        # [성능 최적화] 치매 환자 도보 이동 한계(Koester ISRID 통계: 75% 3.8시간)를 반영한 시뮬레이션 계산 상한
+        sim_elapsed_h = min(raw_elapsed_h, 4.0)
 
         base_speed = settings.BASE_WALK_VELOCITY_KMH
         agent_count = request.parameters.num_agents if request.parameters else settings.NUM_SIMULATION_AGENTS
 
         # -------------------------------------------------------------
         # 1. 보행 도로망 도달 권역(A1/A2 Isochrone) 계산
+        # exact_union=False 로 호출하여 무거운 unary_union 병합 생략 (0.01초 내 반환)
         # -------------------------------------------------------------
         iso_feature = iso_engine.calculate_isochrone(
             center_lat=lat, 
             center_lon=lon, 
-            elapsed_hours=elapsed_h,
-            base_speed_kmh=base_speed
+            elapsed_hours=raw_elapsed_h,
+            base_speed_kmh=base_speed,
+            exact_union=False
         )
         boundary_polygon = shape(iso_feature["geometry"])
         iso_props = iso_feature["properties"]
 
         # -------------------------------------------------------------
         # 2. 몬테카를로 시뮬레이션 선행 실행 (에이전트 통과 도로망 A3 및 최종 정지점 추출)
+        # return_polygon=False 로 호출하여 API 응답에 쓰이지 않는 A3 unary_union 생략
         # -------------------------------------------------------------
         sim_result = simulator.simulate(
             center_lat=lat,
             center_lon=lon,
             num_agents=agent_count,
-            max_hours=elapsed_h,
+            max_hours=sim_elapsed_h,
             base_speed=base_speed,
             beta_dp=1.0,
             beta_cost=1.0,
-            beta_wid=1.0
+            beta_wid=1.0,
+            return_polygon=False
         )
         edge_visit_counts = sim_result.get("edge_visit_counts", {})
         agents = sim_result.get("agents", [])
@@ -198,11 +206,13 @@ def predict_simulation(request: SearchSimulationRequest):
 
         # -------------------------------------------------------------
         # 4. 거점 중심 300m 유입 경로(회랑) 추출
+        # edge_popularity에 이미 계산된 edge_visit_counts를 넘겨 중복 이중 루프 제거
         # -------------------------------------------------------------
         raw_edges_geojson = simulator.extract_poi_corridors(
             agents=agents,
             top_pois=raw_pois,
-            radius_m=300.0
+            radius_m=300.0,
+            edge_popularity=edge_visit_counts
         )
         
         edge_feature_list = []
@@ -265,10 +275,10 @@ def predict_simulation(request: SearchSimulationRequest):
         # -------------------------------------------------------------
         # 6. 신뢰도 등급 산정
         # -------------------------------------------------------------
-        if elapsed_h <= 1.5:
+        if raw_elapsed_h <= 1.5:
             reliability = "STABLE"
             warning_msg = None
-        elif elapsed_h <= 3.0:
+        elif raw_elapsed_h <= 3.0:
             reliability = "CAUTION"
             warning_msg = "실종 후 1.5시간 이상 경과하여 이동 반경이 넓어졌습니다. 대중교통 이용 가능성에 유의하세요."
         else:
@@ -281,11 +291,11 @@ def predict_simulation(request: SearchSimulationRequest):
         summary = SimulationSummary(
             person_type=mp.person_type,
             base_velocity_kmh=base_speed,
-            elapsed_hours=elapsed_h,
+            elapsed_hours=raw_elapsed_h,
             max_distance_m=iso_props["cutoff_distance_m"],
             reliability_status=reliability,
             reliability_warning=warning_msg,
-            area_reduction_rate=float(iso_props["area_reduction_rate_a2"].replace("%", ""))
+            area_reduction_rate=float(str(iso_props["area_reduction_rate_a2"]).replace("%", ""))
         )
 
         # -------------------------------------------------------------

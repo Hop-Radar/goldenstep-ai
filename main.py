@@ -17,6 +17,7 @@ from typing import Dict, Any
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from shapely.geometry import shape
 
 from api.schemas import (
@@ -85,13 +86,31 @@ app.add_middleware(
 
 @app.get("/health", tags=["System"])
 def health_check():
-    """서버 상태 및 엔진 적재 여부 확인"""
-    is_ready = "iso_engine" in app_state and "poi_engine" in app_state and "simulator" in app_state
-    return {
-        "status": "UP" if is_ready else "INITIALIZING",
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+    """서버 상태 및 엔진 적재 여부 확인 (컨테이너/ALB 헬스체크 표준)"""
+    is_ready = bool(
+        app_state.get("iso_engine") is not None and 
+        app_state.get("poi_engine") is not None and 
+        app_state.get("simulator") is not None
+    )
+    
+    if not is_ready:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "INITIALIZING",
+                "message": "시뮬레이션 엔진 및 도로망 데이터 적재 중...",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
 
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": "UP",
+            "message": "GoldenStep AI Engine Ready",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    )
 
 @app.post(
     "/api/v1/simulation/search",

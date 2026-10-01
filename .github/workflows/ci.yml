@@ -1,0 +1,48 @@
+name: GoldenStep AI Pure CI Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  # 1단계: 코드 린트 및 테스트 환경 검증
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install System Libraries (GEOS)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgeos-dev
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify Code Syntax
+        run: |
+          python -m py_compile main.py
+          python -m py_compile core/config.py
+
+  # 2단계: Dockerfile 빌드 무결성 검사 (AWS 푸시 없이 로컬 빌드 성공 여부만 확인)
+  docker-build-check:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t goldenstep-ai:ci-test .

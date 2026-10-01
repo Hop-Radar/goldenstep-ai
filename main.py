@@ -3,7 +3,10 @@ main.py
 - GoldenStep Core AI Simulation API Server
 - 엔드포인트: POST /api/v1/simulation/search (BE 연동 표준 규격)
 - FastAPI Lifespan을 통한 도로망(Graph) 및 POI R-Tree 인메모리 사전 적재 (SLA < 0.5초)
-- [수정] MultiTypeRandomWalkSimulator 연동 및 high_probability_edges 응답 주입 완료
+- [수정 완료] 코어 엔진 인터페이스 동기화:
+    1. isochrone_engine.py에서 피로 감쇠(fatigue_lambda) 제거 반영
+    2. 시뮬레이터(A3) 선행 실행 후 edge_visit_counts를 POI 랭커로 전달하여 권역 내부 거점 선별
+    3. 하드코딩된 category_weights 제거 및 궤적 밀도 기반 TOP 3 거점 도출
 """
 
 import time
@@ -33,7 +36,6 @@ from core.graph_loader import WalkGraphManager
 from core.isochrone_engine import IsochroneEngine
 from core.agent_simulator import MultiTypeRandomWalkSimulator
 from core.poi_ranking_engine import POIRankingEngine
-from core.profiles.profile_factory import ProfileFactory
 from core.config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -101,9 +103,10 @@ def predict_simulation(request: SearchSimulationRequest):
     """
     [Core MVP 실연동 API]
     실종자의 마지막 위치와 경과 시간을 입력받아,
-    1. 보행 네트워크 기반 도달 권역(Isochrone Polygon) 산출
-    2. R-Tree 공간 필터링 및 행동역학 가중치 기반 우선 거점 TOP 3 선별
-    3. 네이버 지도 도보 길찾기 외부 딥링크 생성
+    1. 보행 네트워크 기반 도달 권역(A1/A2 Isochrone Polygon) 산출
+    2. 몬테카를로 에이전트 2,000명 시뮬레이션 및 실제 이동 궤적(A3) 도로망 추출
+    3. 통과 궤적 밀도와 공간 인접도를 결합하여 권역 내부 유력 거점 TOP 3 선별
+    4. 거점 중심 300m 회랑 및 네이버/카카오 지도 도보 길찾기 외부 딥링크 생성
     """
     start_perf = time.perf_counter()
     
@@ -123,85 +126,59 @@ def predict_simulation(request: SearchSimulationRequest):
         lon = mp.last_seen_location.lon
         elapsed_h = mp.elapsed_hours
 
-        # 도메인별 프로필 로드
-        profile = ProfileFactory.get_profile(mp.person_type)
-        base_speed = profile.get("base_speed_kmh", 2.40)
-        fatigue = profile.get("fatigue_lambda", 0.15)
-        cat_weights = profile.get("category_weights", {})
+        base_speed = settings.BASE_WALK_VELOCITY_KMH
+        agent_count = request.parameters.num_agents if request.parameters else settings.NUM_SIMULATION_AGENTS
 
-        # 1. 보행 도로망 도달 권역(Isochrone Feature) 계산
-        if mp.person_type == "DEMENTIA":
-            profile_severe = ProfileFactory.get_profile("DEMENTIA_SEVERE")
-            profile_mild = ProfileFactory.get_profile("DEMENTIA_MILD")
-            
-            # Run A (Severe): No turn penalty (Local Random Wandering)
-            iso_a = iso_engine.calculate_isochrone(
-                center_lat=lat, center_lon=lon, elapsed_hours=elapsed_h,
-                base_speed_kmh=profile_severe.get("base_speed_kmh", 2.40),
-                fatigue_lambda=profile_severe.get("fatigue_lambda", 0.30),
-                turn_penalty_factor=0.0
-            )
-            # Run B (Mild): With turn penalty (Goal-directed Straight Wandering)
-            iso_b = iso_engine.calculate_isochrone(
-                center_lat=lat, center_lon=lon, elapsed_hours=elapsed_h,
-                base_speed_kmh=profile_mild.get("base_speed_kmh", 2.40),
-                fatigue_lambda=profile_mild.get("fatigue_lambda", 0.10),
-                turn_penalty_factor=1.5
-            )
-            
-            from shapely.geometry import mapping
-            zone_a = shape(iso_a["geometry"])
-            zone_b = shape(iso_b["geometry"])
-            
-            # 합집합(Union)으로 전체 앙상블 바운더리 생성
-            boundary_polygon = zone_a.union(zone_b)
-            iso_feature = iso_b  # 속성(Properties)은 범위가 넓은 경증 기준 적용
-            iso_feature["geometry"] = mapping(boundary_polygon)
-        else:
-            iso_feature = iso_engine.calculate_isochrone(
-                center_lat=lat, center_lon=lon, elapsed_hours=elapsed_h,
-                base_speed_kmh=base_speed, fatigue_lambda=fatigue
-            )
-            boundary_polygon = shape(iso_feature["geometry"])
-            zone_a = None
-            zone_b = None
-
-        iso_geom_dict = iso_feature["geometry"]
+        # -------------------------------------------------------------
+        # 1. 보행 도로망 도달 권역(A1/A2 Isochrone) 계산 (fatigue_lambda 제거)
+        # -------------------------------------------------------------
+        iso_feature = iso_engine.calculate_isochrone(
+            center_lat=lat, 
+            center_lon=lon, 
+            elapsed_hours=elapsed_h,
+            base_speed_kmh=base_speed
+        )
+        boundary_polygon = shape(iso_feature["geometry"])
         iso_props = iso_feature["properties"]
 
-        # =========================================================================
-        # [변경 지점] 2. 도달 권역 내부 POI 공간 필터링 및 TOP 3 거점 선행 산출
-        # =========================================================================
-        raw_pois = poi_engine.rank_points_of_interest(
-            boundary_polygon=boundary_polygon,
-            origin_lat=lat,
-            origin_lon=lon,
-            top_k=3,
-            category_weights=cat_weights,
-            zone_a_polygon=zone_a,
-            zone_b_polygon=zone_b
-        )
-
-        # =========================================================================
-        # [변경 지점] 3. 몬테카를로 시뮬레이션 및 우선순위 거점 중심 300m 회랑 추출 연동
-        # =========================================================================
-        agent_count = request.parameters.num_agents if request.parameters else settings.NUM_SIMULATION_AGENTS
+        # -------------------------------------------------------------
+        # 2. 몬테카를로 시뮬레이션 선행 실행 (에이전트 통과 도로망 A3 추출)
+        # -------------------------------------------------------------
         sim_result = simulator.simulate(
             center_lat=lat,
             center_lon=lon,
             num_agents=agent_count,
             max_hours=elapsed_h,
-            base_speed=base_speed
+            base_speed=base_speed,
+            beta_dp=1.0,
+            beta_cost=1.0,
+            beta_wid=1.0
         )
-        
-        # [변경 지점] 거점 중심 300m 완충 구역 발걸음 및 유입 경로 선별 호출
+        edge_visit_counts = sim_result.get("edge_visit_counts", {})
+        agents = sim_result.get("agents", [])
+
+        # -------------------------------------------------------------
+        # 3. 에이전트 궤적 밀도 기반 POI 랭킹 연동 (권역 내부 시설 선별)
+        # -------------------------------------------------------------
+        raw_pois = poi_engine.rank_points_of_interest(
+            boundary_polygon=boundary_polygon,
+            origin_lat=lat,
+            origin_lon=lon,
+            edge_visit_counts=edge_visit_counts,
+            terminal_edge_counts=sim_result.get("terminal_edge_counts", {}),
+            graph=simulator.graph,
+            top_k=3
+        )
+
+        # -------------------------------------------------------------
+        # 4. 거점 중심 300m 유입 경로(회랑) 추출
+        # -------------------------------------------------------------
         raw_edges_geojson = simulator.extract_poi_corridors(
-            agents=sim_result.get("agents", []),
+            agents=agents,
             top_pois=raw_pois,
             radius_m=300.0
         )
         
-        # 4. HighProbabilityEdgesCollection DTO 조립
         edge_feature_list = []
         for feat in raw_edges_geojson.get("features", []):
             edge_feature_list.append(
@@ -237,7 +214,7 @@ def predict_simulation(request: SearchSimulationRequest):
             for p in raw_pois
         ]
 
-        # 6. 신뢰도 등급(Reliability Status) 산정 (기획서 PB-06)
+        # 6. 신뢰도 등급 산정
         if elapsed_h <= 1.5:
             reliability = "STABLE"
             warning_msg = None
@@ -256,7 +233,7 @@ def predict_simulation(request: SearchSimulationRequest):
             max_distance_m=iso_props["cutoff_distance_m"],
             reliability_status=reliability,
             reliability_warning=warning_msg,
-            area_reduction_rate=round(iso_props["arr_raw"] * 100.0, 1)
+            area_reduction_rate=float(iso_props["area_reduction_rate_a2"].replace("%", ""))
         )
 
         # 8. FeatureCollection 래핑
@@ -265,8 +242,8 @@ def predict_simulation(request: SearchSimulationRequest):
                 BoundaryFeature(
                     properties=iso_props,
                     geometry=GeoJSONGeometry(
-                        type=iso_geom_dict["type"],
-                        coordinates=iso_geom_dict["coordinates"]
+                        type=iso_feature["geometry"]["type"],
+                        coordinates=iso_feature["geometry"]["coordinates"]
                     )
                 )
             ]

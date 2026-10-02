@@ -1,0 +1,83 @@
+{
+  "family": "goldenstep-ai-engine",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "2048",
+  "memory": "4096",
+  "containerDefinitions": [
+    {
+      "name": "goldenstep-ai-container",
+      "image": "<AWS_ACCOUNT_ID>.dkr.ecr.ap-northeast-2.amazonaws.com/goldenstep-ai-engine:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "SERVER_HOST",
+          "value": "0.0.0.0"
+        },
+        {
+          "name": "SERVER_PORT",
+          "value": "8000"
+        },
+        {
+          "name": "DEBUG",
+          "value": "False"
+        },
+        {
+          "name": "BASE_WALK_VELOCITY_KMH",
+          "value": "1.56"
+        },
+        {
+          "name": "NUM_SIMULATION_AGENTS",
+          "value": "2000"
+        },
+        {
+          "name": "DEFAULT_SEARCH_RADIUS_M",
+          "value": "3500.0"
+        },
+        {
+          "name": "CACHE_GRAPH_PATH",
+          "value": "data/networks/seoul_walk_network.graphml"
+        },
+        {
+          "name": "BUILDING_POI_DATA_PATH",
+          "value": "data/pois/seoul_building_pois_3.parquet"
+        },
+        {
+          "name": "PUBLIC_POI_DATA_PATH",
+          "value": "data/pois/seoul_public_pois.geojson"
+        },
+        {
+          "name": "AWS_S3_DATA_BUCKET",
+          "value": "goldenstep-model-assets"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health || exit 1"
+        ],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/goldenstep-ai-engine",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

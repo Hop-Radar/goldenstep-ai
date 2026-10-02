@@ -23,10 +23,12 @@ FROM python:3.11-slim AS runner
 
 WORKDIR /app
 
-# 공간 기하 라이브러리(Shapely C-GEOS 바인딩) 및 헬스체크용 curl 설치
+# 공간 기하 라이브러리(Shapely C-GEOS 바인딩), 헬스체크용 curl, 그리고 AWS S3 연동용 awscli 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgeos-c1v5 \
     curl \
+    awscli \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # 빌더 스테이지의 파이썬 패키지 바이너리 복사
@@ -37,10 +39,14 @@ ENV PYTHONUNBUFFERED=1
 # 데이터 디렉터리 기본 구조 확보 (마운트 또는 Entrypoint 다운로드 타깃)
 RUN mkdir -p data/networks data/pois
 
-# 애플리케이션 핵심 서빙 소스 복사
+# 애플리케이션 핵심 서빙 소스 및 엔트리포인트 복사
 COPY core/ ./core/
 COPY api/ ./api/
 COPY main.py .
+COPY infra/docker/entrypoint.sh ./entrypoint.sh
+
+# 엔트리포인트 권한 부여 및 윈도우(CRLF) 줄바꿈 문자 오류 방지
+RUN dos2unix ./entrypoint.sh && chmod +x ./entrypoint.sh
 
 EXPOSE 8000
 
@@ -48,5 +54,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# 기본 서버 실행 명령
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 컨테이너 시작 시 엔트리포인트 스크립트를 통해 AWS S3 동기화 후 Uvicorn 기동
+ENTRYPOINT ["./entrypoint.sh"]

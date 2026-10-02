@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  ai-engine:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: goldenstep-ai-engine
+    ports:
+      - "8000:8000"
+    volumes:
+      # 로컬 대용량 데이터를 컨테이너 내부로 직접 마운트
+      - ../../data/networks:/app/data/networks:ro
+      - ../../data/pois:/app/data/pois:ro
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8000
+      - DEBUG=False
+      - BASE_WALK_VELOCITY_KMH=1.56
+      - NUM_SIMULATION_AGENTS=2000
+      - DEFAULT_SEARCH_RADIUS_M=3500.0
+      - CACHE_GRAPH_PATH=data/networks/seoul_walk_network.graphml
+      - BUILDING_POI_DATA_PATH=data/pois/seoul_building_pois_3.parquet
+      - PUBLIC_POI_DATA_PATH=data/pois/seoul_public_pois.geojson
+    restart: unless-stopped

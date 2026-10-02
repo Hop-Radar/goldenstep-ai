@@ -157,7 +157,7 @@
 
 ## 6. 전체 시스템 아키텍처 및 MSA 서빙 구조 (System Architecture)
 
-GoldenStep 시스템은 프론트엔드(Vanilla JS/Nginx), 백엔드(Java 21/Spring Boot), AI 엔진(Python 3.11/FastAPI)의 3대 독립 저장소 체계로 분리되어 마이크로서비스 아키텍처(MSA) 원칙에 따라 동작합니다[cite: 1, 2]. 단일 EC2 인스턴스 내 사용자 정의 Docker 네트워크를 구축하여 외부 노출을 최소화하고, 내부 REST 통신으로 고속 연산을 수행합니다[cite: 1, 2].
+GoldenStep 시스템은 프론트엔드(Vanilla JS/Nginx), 백엔드(Java 21/Spring Boot), AI 엔진(Python 3.11/FastAPI)의 3대 독립 저장소 체계로 분리되어 마이크로서비스 아키텍처(MSA) 원칙에 따라 동작합니다. 단일 EC2 인스턴스 내 사용자 정의 Docker 네트워크를 구축하여 외부 노출을 최소화하고, 내부 REST 통신으로 고속 연산을 수행합니다.
 
 <p align="center">
   <img src="docs/images/architecture.svg" alt="GoldenStep System & Deployment Architecture" width="100%">
@@ -167,11 +167,11 @@ GoldenStep 시스템은 프론트엔드(Vanilla JS/Nginx), 백엔드(Java 21/Spr
 
 | 계층 (Tier) | 구성 컴포넌트 | 포트 | 주요 역할 및 특징 |
 | :--- | :--- | :---: | :--- |
-| **Frontend** | `gs-frontend-web` (Nginx Alpine) | `:80`, `:443` | 정적 웹 리소스 서빙, HTTPS 종단, `/api/*` 리버스 프록시 (CORS 원천 차단)[cite: 2] |
-| **Backend** | `gs-backend-api` (Spring Boot 3) | `:8080` | 비즈니스 로직, 12시간 단축 토큰 관리, Naver Geocoding 외부 연동[cite: 1, 2, 5] |
-| **AI Engine** | `gs-ai-engine` (FastAPI / Uvicorn) | `:8000` | 서울 도로망/POI 사전 적재, 2,000명 에이전트 몬테카를로 시뮬레이션, 거점 확률 산출[cite: 4] |
-| **Database** | Amazon RDS MySQL (`gs-production-db`) | `:3306` | 수색 세션 이력 및 메타데이터 영구 저장 (보안 그룹 체이닝으로 외부 직접 접근 차단)[cite: 1, 5] |
-| **External API**| NAVER Maps & TMAP API | - | 웹 지도 타일/폴리곤 렌더링 및 우선 확인 장소 간 보행자 최단 경로 안내[cite: 2] |
+| **Frontend** | `gs-frontend-web` (Nginx Alpine) | `:80`, `:443` | 정적 웹 리소스 서빙, HTTPS 종단, `/api/*` 리버스 프록시 (CORS 원천 차단) |
+| **Backend** | `gs-backend-api` (Spring Boot 3) | `:8080` | 비즈니스 로직, 12시간 단축 토큰 관리, Naver Geocoding 외부 연동 |
+| **AI Engine** | `gs-ai-engine` (FastAPI / Uvicorn) | `:8000` | 서울 도로망/POI 사전 적재, 2,000명 에이전트 몬테카를로 시뮬레이션, 거점 확률 산출 |
+| **Database** | Amazon RDS MySQL (`gs-production-db`) | `:3306` | 수색 세션 이력 및 메타데이터 영구 저장 (보안 그룹 체이닝으로 외부 직접 접근 차단) |
+| **External API**| NAVER Maps & TMAP API | - | 웹 지도 타일/폴리곤 렌더링 및 우선 확인 장소 간 보행자 최단 경로 안내 |
 
 ---
 
@@ -181,61 +181,61 @@ GoldenStep 시스템은 프론트엔드(Vanilla JS/Nginx), 백엔드(Java 21/Spr
 goldenstep-algorithm/
 ├── api/
 │   ├── __init__.py
-│   └── schemas.py                       # Pydantic Request/Response DTO (RangeProbabilities 등)[cite: 1, 2]
+│   └── schemas.py                       # Pydantic Request/Response DTO (RangeProbabilities 등)
 ├── core/
 │   ├── __init__.py
-│   ├── agent_simulator.py               # 2,000명 몬테카를로 로짓 시뮬레이션 및 정지점 추적[cite: 3, 4]
-│   ├── config.py                        # pydantic-settings 기반 환경 변수 로더[cite: 3, 4]
-│   ├── graph_loader.py                  # OSM 보행망 로드, 방위각 사전연산, 계단 속성 정규화[cite: 2, 3]
-│   ├── isochrone_engine.py              # 등속 이동 한계선(A1) 및 보행 도로망 합집합(A2) 생성[cite: 2, 3]
-│   ├── poi_ranking_engine.py            # STRtree 공간 색인, 다기준 거점 채점 및 NMS 공간 분산[cite: 2, 3]
-│   └── profiles/                        # 대상자 유형별 거동 파라미터 계층[cite: 3, 5]
-│       ├── __init__.py
-│       ├── profile_factory.py           # 프로파일 로더 및 팩토리 모듈[cite: 3, 5]
-│       ├── dementia_profile.json        # 치매 노인 기본 거동 파라미터 (v0=2.4km/h)[cite: 2, 3]
-│       ├── dementia_mild_profile.json   # 경증 치매 프로파일[cite: 3, 5]
-│       ├── dementia_severe_profile.json # 중증 치매 프로파일[cite: 3, 5]
-│       └── child_profile.json           # 실종 아동 확장 프로파일[cite: 3, 5]
-├── data/                                # 로컬 데이터 저장소 (.gitignore 대상, S3 동기화)[cite: 4, 5]
-│   ├── benchmarks/                      # 독립 검증 벤치마크 데이터셋[cite: 3, 6]
-│   │   ├── ground_truth_cases.json      # 초기 단위 검증 사례셋 (핵심 4건 등)[cite: 2, 3]
-│   │   ├── goldenstep_seoul_validation_train_v2.json # V2 실사례 학습셋 (191건)[cite: 6]
-│   │   └── goldenstep_seoul_validation_test_v3.json  # V3 최종 실사례 검증셋 (220건)[cite: 6]
+│   ├── agent_simulator.py               # 2,000명 몬테카를로 로짓 시뮬레이션 및 정지점 추적
+│   ├── config.py                        # pydantic-settings 기반 환경 변수 로더
+│   ├── graph_loader.py                  # OSM 보행망 로드, 방위각 사전연산, 계단 속성 정규화
+│   ├── isochrone_engine.py              # 등속 이동 한계선(A1) 및 보행 도로망 합집합(A2) 생성
+│   ├── poi_ranking_engine.py            # STRtree 공간 색인, 다기준 거점 채점 및 NMS 공간 분산
+│   └── profiles/                        # 대상자 유형별 거동 파라미터 계층
+│       ├── __init__.py 
+│       ├── profile_factory.py           # 프로파일 로더 및 팩토리 모듈
+│       ├── dementia_profile.json        # 치매 노인 기본 거동 파라미터 (v0=2.4km/h)
+│       ├── dementia_mild_profile.json   # 경증 치매 프로파일
+│       ├── dementia_severe_profile.json # 중증 치매 프로파일
+│       └── child_profile.json           # 실종 아동 확장 프로파일
+├── data/                                # 로컬 데이터 저장소 (.gitignore 대상, S3 동기화)
+│   ├── benchmarks/                      # 독립 검증 벤치마크 데이터셋
+│   │   ├── ground_truth_cases.json      # 초기 단위 검증 사례셋 (핵심 4건 등)
+│   │   ├── goldenstep_seoul_validation_train_v2.json # V2 실사례 학습셋 (191건)
+│   │   └── goldenstep_seoul_validation_test_v3.json  # V3 최종 실사례 검증셋 (220건)
 │   ├── networks/
-│   │   └── seoul_walk_network.graphml   # 서울 전역 보행 네트워크 (16.5만 노드, 47.4만 엣지)[cite: 2, 4]
+│   │   └── seoul_walk_network.graphml   # 서울 전역 보행 네트워크 (16.5만 노드, 47.4만 엣지)
 │   └── pois/
-│       ├── seoul_building_pois_3.parquet # 서울시 25개 자치구 전수 건축물 중심점 (69.5만 건)[cite: 2, 4]
-│       └── seoul_public_pois.geojson    # 서울시 공공 생활 거점 표본 풀 (2,934건)[cite: 2, 4]
+│       ├── seoul_building_pois_3.parquet # 서울시 25개 자치구 전수 건축물 중심점 (69.5만 건)
+│       └── seoul_public_pois.geojson    # 서울시 공공 생활 거점 표본 풀 (2,934건)
 ├── docs/
 │   ├── images/
-│   │   └── architecture.png             # 시스템 및 클라우드 배포 아키텍처 다이어그램[cite: 1]
-│   ├── mock_search_request.json         # 프론트/백엔드 연동용 요청 Mock[cite: 2]
-│   ├── mock_search_response.json        # 프론트/백엔드 연동용 응답 Mock[cite: 2]
-│   └── validation_report.md             # V3 실사례 검증 결과 공식 성적표 리포트[cite: 1, 2]
+│   │   └── architecture.png             # 시스템 및 클라우드 배포 아키텍처 다이어그램
+│   ├── mock_search_request.json         # 프론트/백엔드 연동용 요청 Mock
+│   ├── mock_search_response.json        # 프론트/백엔드 연동용 응답 Mock
+│   └── validation_report.md             # V3 실사례 검증 결과 공식 성적표 리포트
 ├── infra/
 │   ├── aws/
-│   │   └── task-definition.json        # AWS ECS Fargate 매니페스트 (참조용)[cite: 1, 9]
+│   │   └── task-definition.json        # AWS ECS Fargate 매니페스트 (참조용)
 │   ├── compose/
-│   │   └── docker-compose.prod.yml     # 단일 EC2 통합 구동용 Docker Compose 명세[cite: 1, 9]
+│   │   └── docker-compose.prod.yml     # 단일 EC2 통합 구동용 Docker Compose 명세
 │   └── docker/
-│       └── entrypoint.sh               # S3 에셋 자동 동기화 및 Uvicorn 실행 스크립트[cite: 1, 4]
+│       └── entrypoint.sh               # S3 에셋 자동 동기화 및 Uvicorn 실행 스크립트
 ├── scripts/
-│   ├── apply_elevation_to_graph.py     # DEM 고도 및 경사도 주입 배치[cite: 1, 3]
-│   ├── build_seoul_total_pois.py       # 상권 및 공공 시설 전처리 스크립트[cite: 1, 3]
-│   ├── normalize_gt_categories.py      # 검증셋 카테고리 정규화 스크립트[cite: 1, 3]
-│   ├── process_building_register.py    # 건축물대장 파싱 및 Parquet 변환 스크립트[cite: 1, 3]
-│   ├── run_v3_validation.py            # V3 실사례 벤치마크(포섭률, ARR) 검증 파이프라인[cite: 1, 3]
-│   └── tune_hyperparameters.py         # 행동 가중치 튜닝 실험 스크립트[cite: 3, 10]
+│   ├── apply_elevation_to_graph.py     # DEM 고도 및 경사도 주입 배치
+│   ├── build_seoul_total_pois.py       # 상권 및 공공 시설 전처리 스크립트
+│   ├── normalize_gt_categories.py      # 검증셋 카테고리 정규화 스크립트
+│   ├── process_building_register.py    # 건축물대장 파싱 및 Parquet 변환 스크립트
+│   ├── run_v3_validation.py            # V3 실사례 벤치마크(포섭률, ARR) 검증 파이프라인
+│   └── tune_hyperparameters.py         # 행동 가중치 튜닝 실험 스크립트
 ├── tests/
 │   ├── __init__.py
-│   ├── test_api.py                     # FastAPI 엔드포인트 및 DTO 단위 테스트[cite: 3, 10]
-│   ├── test_model.py                   # 태그 빈도 및 모델 기본 점검 스크립트[cite: 3, 10]
-│   └── validate_model.py               # 초기 벤치마크 및 ARR/포섭률 검증 스크립트[cite: 2, 3]
-├── .dockerignore                       # 컨테이너 빌드 제외 패턴[cite: 3, 9]
-├── .env.example                        # Git 공유용 환경변수 템플릿[cite: 3, 9]
-├── Dockerfile                          # Python 3.11 경량 멀티스테이지 컨테이너 명세[cite: 3, 9]
-├── main.py                             # FastAPI 진입점 및 Lifespan 수명주기 관리[cite: 1, 2]
-└── requirements.txt                    # 의존성 패키지 명세서[cite: 2, 3]
+│   ├── test_api.py                     # FastAPI 엔드포인트 및 DTO 단위 테스트
+│   ├── test_model.py                   # 태그 빈도 및 모델 기본 점검 스크립트
+│   └── validate_model.py               # 초기 벤치마크 및 ARR/포섭률 검증 스크립트
+├── .dockerignore                       # 컨테이너 빌드 제외 패턴
+├── .env.example                        # Git 공유용 환경변수 템플릿
+├── Dockerfile                          # Python 3.11 경량 멀티스테이지 컨테이너 명세
+├── main.py                             # FastAPI 진입점 및 Lifespan 수명주기 관리
+└── requirements.txt                    # 의존성 패키지 명세서
 ```
 
 ---
@@ -364,7 +364,7 @@ goldenstep-algorithm/
 * **독립 벤치마크 데이터셋 평가 (V2 & V3)**:
   - 안전디딤돌 실종경보 및 언론 보도자료를 지오코딩한 서울 지역 실사건 기반 데이터셋(V2 191건, V3 팩트 44건 및 공간 불확실성 증강 176건)을 투입하여 평가를 진행했습니다.
 * **통과 도로망 권역 포섭률 (Hit-Rate)**:
-  - 실종자의 출발 좌표와 경과 시간만으로 생성된 상위 통과 도로망 완충 구역($A_3 + 100\text{m}$ 시야 버퍼) 내에 실제 발견 좌표가 유효하게 포섭되는지 여부를 판정합니다[cite: 1].
+  - 실종자의 출발 좌표와 경과 시간만으로 생성된 상위 통과 도로망 완충 구역($A_3 + 100\text{m}$ 시야 버퍼) 내에 실제 발견 좌표가 유효하게 포섭되는지 여부를 판정합니다.
 * **추천 거점 최단 이격 오차 ($D_{\text{error}}$)**:
   - 시스템이 선별한 우선 확인 거점 TOP 3와 실제 발견 지점 간의 최단 거리($D_{\text{error}} = \min \Vert{}\text{POI}_k - \text{Found}\Vert{}$)를 측정하고, 현장 수색 전술 반경(100m 정밀 적중, 300m 집중 탐문)별 포섭률을 정량 산출했습니다.
 

@@ -1,0 +1,332 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1020" width="100%" height="100%" style="background:#ffffff; font-family:-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', sans-serif;">
+  <defs>
+    <filter id="shadow-card" x="-4%" y="-4%" width="108%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arr-gray" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#64748b"/>
+    </marker>
+    <marker id="arr-dark" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0f172a"/>
+    </marker>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arr-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#9333ea"/>
+    </marker>
+  </defs>
+
+  <!-- [메인 타이틀 헤더] -->
+  <text x="40" y="45" font-size="26" font-weight="900" fill="#0f172a">GOLDEN STEP | 전체 시스템 및 AWS 배포 아키텍처 (v2)</text>
+  <text x="40" y="70" font-size="13" font-weight="500" fill="#64748b">보행 네트워크 기반 치매 실종자 골든타임 수색 지원 시스템 | Docker 기반 올인원 배포 및 S3 모델 에셋 파이프라인</text>
+
+  <!-- ==================== [1. 좌측 CI/CD 개발 파이프라인] ==================== -->
+  <rect x="35" y="90" width="285" height="665" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5" filter="url(#shadow-card)"/>
+  <rect x="35" y="90" width="285" height="38" rx="10" fill="#1d4ed8"/>
+  <text x="50" y="115" font-size="14" font-weight="700" fill="#ffffff">⚙️ 개발 및 CI/CD 파이프라인</text>
+  <text x="50" y="145" font-size="11" fill="#475569">파트별 독립 검증을 거쳐 AWS 환경에 배포</text>
+
+  <!-- 로컬 개발 -->
+  <rect x="50" y="160" width="255" height="105" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="65" y="185" font-size="13" font-weight="700" fill="#0f172a">💻 개발 환경 (Local)</text>
+  <text x="65" y="206" font-size="11" fill="#334155">• Frontend (HTML / CSS / Vanilla JS)</text>
+  <text x="65" y="224" font-size="11" fill="#334155">• Backend (Java 21 / Spring Boot)</text>
+  <text x="65" y="242" font-size="11" fill="#334155">• AI Engine (Python 3.11 / FastAPI)</text>
+  <line x1="177" y1="265" x2="177" y2="288" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+
+  <!-- GitHub 저장소 -->
+  <rect x="50" y="292" width="255" height="105" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="65" y="317" font-size="13" font-weight="700" fill="#0f172a">🐙 GitHub 3대 독립 저장소</text>
+  <text x="65" y="338" font-size="11" fill="#334155">• goldenstep-frontend</text>
+  <text x="65" y="356" font-size="11" fill="#334155">• goldenstep-backend</text>
+  <text x="65" y="374" font-size="11" fill="#334155">• goldenstep-algoisthm</text>
+  <line x1="177" y1="397" x2="177" y2="420" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+
+  <!-- GitHub Actions CI -->
+  <rect x="50" y="424" width="255" height="120" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="65" y="449" font-size="13" font-weight="700" fill="#0f172a">🔄 GitHub Actions CI</text>
+  <text x="65" y="471" font-size="10.5" fill="#334155">• Frontend : HTML / Stylelint / JS 문법</text>
+  <text x="65" y="490" font-size="10.5" fill="#334155">• Backend : Gradle Test &amp; bootJar 빌드</text>
+  <text x="65" y="509" font-size="10.5" fill="#334155">• AI Engine: Python 컴파일 &amp; Docker 빌드</text>
+  <text x="65" y="528" font-size="10.5" font-weight="700" fill="#2563eb">통합 전 기본 품질 자동 검증</text>
+  <line x1="177" y1="544" x2="177" y2="568" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+
+  <!-- AWS 배포 (CD) -->
+  <rect x="50" y="572" width="255" height="160" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="65" y="597" font-size="13" font-weight="700" fill="#1e40af">🚀 AWS 배포 파이프라인 (CD)</text>
+  <text x="65" y="619" font-size="10.5" fill="#334155">• ECR 도커 이미지 푸시 (Git SHA 태그)</text>
+  <text x="65" y="637" font-size="10.5" fill="#334155">• AWS SSM 에이전트 배포 명령 전송</text>
+  <text x="65" y="655" font-size="10.5" fill="#334155">• EC2 내 무중단 롤링 업데이트</text>
+  <rect x="62" y="670" width="230" height="48" rx="5" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1"/>
+  <text x="70" y="688" font-size="10" font-weight="700" fill="#0369a1">[배포 환경]</text>
+  <text x="70" y="705" font-size="10" font-weight="700" fill="#0284c7">EC2 Docker Compose 올인원 배포</text>
+
+  <line x1="305" y1="652" x2="340" y2="652" stroke="#1d4ed8" stroke-width="2" marker-end="url(#arr-blue)"/>
+
+  <!-- ==================== [2. 중앙 AWS Cloud 메인 영역] ==================== -->
+  <rect x="345" y="90" width="940" height="665" rx="10" fill="#fffbeb" stroke="#fde68a" stroke-width="2" filter="url(#shadow-card)"/>
+  <text x="365" y="123" font-size="18" font-weight="900" fill="#d97706">aws</text>
+  <text x="405" y="122" font-size="15" font-weight="bold" fill="#92400e">AWS Cloud (ap-northeast-2 서울 리전)</text>
+  <text x="750" y="122" font-size="11.5" fill="#78350f">최소 리소스 구성(단일 EC2 올인원)으로 안정성과 운영 단순성 확보</text>
+
+  <!-- VPC 박스 -->
+  <rect x="360" y="140" width="580" height="600" rx="8" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="375" y="167" font-size="13.5" font-weight="bold" fill="#d97706">☁️ VPC (가상 사설 네트워크)</text>
+
+  <!-- Public Subnet / EC2 박스 -->
+  <rect x="375" y="180" width="550" height="400" rx="7" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="390" y="205" font-size="13" font-weight="bold" fill="#1e40af">🖥️ Amazon EC2 (단일 애플리케이션 인스턴스)</text>
+  <text x="660" y="205" font-size="11" fill="#475569">하나의 EC2에서 3개 서비스 컨테이너 운영</text>
+
+  <!-- Docker 환경명 명시 박스 -->
+  <rect x="385" y="222" width="530" height="346" rx="6" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="400" y="244" font-size="12" font-weight="bold" fill="#2563eb">🐳 Docker 네트워크: goldenstep-bridge-net | 스택명: goldenstep-app-stack</text>
+
+  <!-- 컨테이너 1: Frontend -->
+  <rect x="398" y="258" width="158" height="295" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.2"/>
+  <rect x="410" y="270" width="24" height="24" rx="4" fill="#16a34a"/>
+  <text x="416" y="287" font-size="14" font-weight="bold" fill="#ffffff">N</text>
+  <text x="442" y="282" font-size="12.5" font-weight="bold" fill="#0f172a">Frontend</text>
+  <text x="442" y="296" font-size="10" font-weight="bold" fill="#16a34a">Nginx : 80 / 443</text>
+  <text x="408" y="315" font-size="10" font-weight="bold" fill="#047857">[컨테이너: gs-frontend-web]</text>
+  
+  <text x="408" y="338" font-size="10" fill="#334155">• 정적 SPA 파일 서빙</text>
+  <text x="418" y="354" font-size="9.5" fill="#64748b">(HTML/CSS/Vanilla JS)</text>
+  <text x="408" y="372" font-size="10" fill="#334155">• SSL/TLS 인증서 종단</text>
+  <text x="408" y="390" font-size="10" fill="#334155">• /api/* 리버스 프록시</text>
+  <text x="408" y="408" font-size="10" fill="#334155">• 단일 도메인 CORS 방지</text>
+  
+  <rect x="405" y="425" width="144" height="115" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1"/>
+  <text x="412" y="445" font-size="9.5" font-weight="bold" fill="#15803d">[프론트 연동 방식]</text>
+  <text x="412" y="465" font-size="9" fill="#166534">• S3 분리 호스팅 대신</text>
+  <text x="412" y="482" font-size="9" fill="#166534">  동일 EC2 컨테이너로 서빙</text>
+  <text x="412" y="500" font-size="9" fill="#166534">• 웹서버와 프록시 역할을</text>
+  <text x="412" y="517" font-size="9" fill="#166534">  Nginx 1대로 일원화</text>
+
+  <!-- 프록시 연결선 -->
+  <line x1="556" y1="365" x2="576" y2="365" stroke="#16a34a" stroke-width="1.8" marker-end="url(#arr-green)"/>
+  <text x="566" y="357" font-size="8.5" font-weight="bold" fill="#16a34a" text-anchor="middle">/api/*</text>
+  <text x="566" y="377" font-size="8" fill="#16a34a" text-anchor="middle">(프록시)</text>
+
+  <!-- 컨테이너 2: Backend -->
+  <rect x="580" y="258" width="160" height="295" rx="6" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.2"/>
+  <circle cx="596" cy="282" r="12" fill="#2563eb"/>
+  <text x="591" y="287" font-size="12" font-weight="bold" fill="#ffffff">S</text>
+  <text x="615" y="282" font-size="12.5" font-weight="bold" fill="#0f172a">Backend</text>
+  <text x="615" y="296" font-size="10" font-weight="bold" fill="#2563eb">Spring Boot : 8080</text>
+  <text x="588" y="315" font-size="10" font-weight="bold" fill="#1d4ed8">[컨테이너: gs-backend-api]</text>
+
+  <text x="588" y="338" font-size="10" fill="#334155">• 비즈니스 REST API 제공</text>
+  <text x="588" y="356" font-size="10" fill="#334155">• 수색 세션 및 입력 검증</text>
+  <text x="588" y="374" font-size="10" fill="#334155">• 12시간 단축 토큰 관리</text>
+  <text x="588" y="392" font-size="10" fill="#334155">• AI 분석 요청 중계</text>
+  <text x="588" y="410" font-size="10" fill="#334155">• RDS MySQL 트랜잭션</text>
+  <text x="588" y="428" font-size="10" fill="#334155">• Naver Geocoding 연동</text>
+  
+  <rect x="586" y="445" width="148" height="95" rx="5" fill="#dbeafe" stroke="#93c5fd" stroke-width="1"/>
+  <text x="594" y="468" font-size="9.5" font-weight="bold" fill="#1e40af">[오케스트레이션 허브]</text>
+  <text x="594" y="488" font-size="9" fill="#1e3a8a">• 클라이언트와 AI 엔진 간</text>
+  <text x="594" y="505" font-size="9" fill="#1e3a8a">  직접 결합 차단</text>
+  <text x="594" y="522" font-size="9" fill="#1e3a8a">• 세션 영속성 및 상태 제어</text>
+
+  <!-- AI 호출 연결선 -->
+  <line x1="740" y1="365" x2="760" y2="365" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arr-blue)"/>
+  <text x="750" y="357" font-size="8.5" font-weight="bold" fill="#2563eb" text-anchor="middle">REST</text>
+  <text x="750" y="377" font-size="8" fill="#2563eb" text-anchor="middle">JSON</text>
+
+  <!-- 컨테이너 3: AI Server -->
+  <rect x="764" y="258" width="140" height="295" rx="6" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.2"/>
+  <circle cx="778" cy="282" r="12" fill="#9333ea"/>
+  <text x="774" y="287" font-size="12" font-weight="bold" fill="#ffffff">Py</text>
+  <text x="798" y="282" font-size="12.5" font-weight="bold" fill="#0f172a">AI Server</text>
+  <text x="798" y="296" font-size="10" font-weight="bold" fill="#9333ea">FastAPI : 8000</text>
+  <text x="772" y="315" font-size="10" font-weight="bold" fill="#7e22ce">[컨테이너: gs-ai-engine]</text>
+
+  <text x="772" y="338" font-size="9.5" fill="#334155">• 도달 권역(Isochrone)</text>
+  <text x="772" y="356" font-size="9.5" fill="#334155">• 2,000 에이전트 시뮬</text>
+  <text x="772" y="374" font-size="9.5" fill="#334155">• 우선 확인 POI 랭킹</text>
+  <text x="772" y="392" font-size="9.5" fill="#334155">• 인메모리 캐시 (1.5GB)</text>
+  <text x="772" y="410" font-size="9.5" fill="#334155">• 순수 vCPU 수학 연산</text>
+  
+  <rect x="770" y="445" width="128" height="95" rx="5" fill="#f3e8ff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="776" y="468" font-size="9.5" font-weight="bold" fill="#6b21a8">[헬스체크 표준화]</text>
+  <text x="776" y="488" font-size="9" fill="#581c87">• 그래프 로딩 중 503</text>
+
+  <text x="776" y="505" font-size="9" fill="#581c87">• 적재 완료 시 200 OK</text>
+  <text x="776" y="522" font-size="9" fill="#581c87">• 컨테이너 안정성 보장</text>
+
+  <!-- Private Subnet / RDS MySQL -->
+  <rect x="375" y="595" width="550" height="130" rx="7" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="390" y="618" font-size="12" font-weight="bold" fill="#475569">🔒 Private Subnet (비공개 데이터베이스 격리 서브넷)</text>
+
+  <rect x="470" y="630" width="360" height="82" rx="6" fill="#ffffff" stroke="#9333ea" stroke-width="1.5"/>
+  <rect x="485" y="645" width="28" height="28" rx="4" fill="#7c3aed"/>
+  <text x="492" y="664" font-size="12" font-weight="bold" fill="#ffffff">DB</text>
+  <text x="522" y="654" font-size="12.5" font-weight="bold" fill="#0f172a">Amazon RDS for MySQL (:3306)</text>
+  <text x="522" y="672" font-size="10.5" fill="#475569">•  24시간만 보관하고 spring 스케쥴러가 삭제</text>
+  <text x="522" y="690" font-size="10" font-weight="bold" fill="#b91c1c">• 보안 그룹: EC2 인스턴스 인바운드만 허용 / 외부 직접 접근 차단</text>
+
+  <line x1="660" y1="553" x2="660" y2="630" stroke="#9333ea" stroke-width="2" marker-end="url(#arr-purple)"/>
+  <text x="670" y="580" font-size="9.5" font-weight="bold" fill="#9333ea">JDBC:3306</text>
+
+  <!-- ==================== [S3 모델 에셋 버킷 상세 (불필요한 artifacts, backups 제거 완료)] ==================== -->
+  <rect x="955" y="140" width="315" height="350" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.8"/>
+  <rect x="970" y="155" width="26" height="26" rx="4" fill="#16a34a"/>
+  <text x="976" y="173" font-size="13" font-weight="bold" fill="#ffffff">S3</text>
+  <text x="1005" y="168" font-size="13" font-weight="bold" fill="#15803d">Amazon S3 Model Bucket</text>
+  <text x="1005" y="184" font-size="11" font-weight="bold" fill="#16a34a">(goldenstep-model-assets)</text>
+
+  <text x="970" y="210" font-size="11" font-weight="bold" fill="#0f172a">[S3 버킷 디렉터리 구조 및 모델 에셋 명세]</text>
+
+  <rect x="968" y="222" width="290" height="175" rx="5" fill="#ffffff" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="978" y="242" font-size="11" font-weight="bold" fill="#166534">📁 /data/networks/</text>
+  <text x="990" y="260" font-size="10" fill="#334155">└─ seoul_walk_network.graphml</text>
+  <text x="1005" y="276" font-size="9.5" fill="#64748b">(서울 전역 보행 도로망 16.5만 노드 / 47만 엣지)</text>
+
+  <text x="978" y="304" font-size="11" font-weight="bold" fill="#166534">📁 /data/pois/</text>
+  <text x="990" y="322" font-size="10" fill="#334155">├─ seoul_building_pois_3.parquet (70만 건)</text>
+  <text x="1005" y="338" font-size="9.5" fill="#64748b">(서울시 전수 건축물 중심점 R-Tree 에셋)</text>
+  <text x="990" y="356" font-size="10" fill="#334155">└─ seoul_public_pois.geojson (2,934건)</text>
+  <text x="1005" y="372" font-size="9.5" fill="#64748b">(편의점/정류장/공원 등 핵심 공공 거점)</text>
+
+  <rect x="968" y="405" width="290" height="75" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1"/>
+  <text x="978" y="425" font-size="9.5" font-weight="bold" fill="#15803d">★ 컨테이너 기동(부트스트랩) 시 자동 동기화</text>
+  <text x="978" y="443" font-size="9" fill="#166534">• GitHub 100MB 용량 한계 극복을 위한 격리 보관</text>
+  <text x="978" y="458" font-size="9" fill="#166534">• entrypoint.sh가 S3에서 EC2 로컬 볼륨으로 동기화</text>
+  <text x="978" y="473" font-size="9" fill="#166534">• 서버 기동 시 FastAPI 인메모리에 1회 적재 서빙</text>
+
+  <!-- 부트스트랩 동기화 화살표 -->
+  <path d="M 955 350 L 920 350 L 904 350" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#arr-green)"/>
+  <text x="930" y="342" font-size="9" font-weight="bold" fill="#16a34a" text-anchor="middle">부트스트랩</text>
+
+  <!-- 보안 및 관리 서비스 -->
+  <rect x="955" y="505" width="315" height="220" rx="8" fill="#fdf2f8" stroke="#fbcfe8" stroke-width="1.5"/>
+  <text x="970" y="530" font-size="12.5" font-weight="bold" fill="#be185d">🔒 인프라 보안 및 관리 서비스</text>
+
+  <text x="970" y="555" font-size="10.5" font-weight="bold" fill="#0f172a">• AWS Secrets Manager</text>
+  <text x="980" y="572" font-size="9.5" fill="#475569">-환경변수로 각 애플리케이션 컨테이너에 안전 주입</text>
+
+  <text x="970" y="597" font-size="10.5" font-weight="bold" fill="#0f172a">• Amazon ECR (Private Container Registry)</text>
+  <text x="980" y="614" font-size="9.5" fill="#475569">- Frontend / Backend / AI 독립 Docker 이미지 저장</text>
+
+  <text x="970" y="639" font-size="10.5" font-weight="bold" fill="#0f172a">• AWS Systems Manager (SSM)</text>
+  <text x="980" y="656" font-size="9.5" fill="#475569">- SSH 포트 노출 없이 EC2 내부 배포 명령어 실행</text>
+  <text x="980" y="673" font-size="9.5" fill="#475569">- docker compose pull &amp; up 롤링 컨테이너 교체</text>
+
+  <!-- ==================== [3. 우측 외부 연동 서비스] ==================== -->
+  <rect x="1300" y="90" width="265" height="665" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow-card)"/>
+  <rect x="1300" y="90" width="265" height="38" rx="10" fill="#0f172a"/>
+  <text x="1315" y="115" font-size="14" font-weight="700" fill="#ffffff">🌐 외부 연동 서비스</text>
+  <text x="1315" y="145" font-size="11" fill="#475569">지도 및 경로 안내를 위한 전문 외부 API</text>
+
+  <!-- NAVER Maps -->
+  <rect x="1315" y="165" width="235" height="185" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
+  <rect x="1330" y="180" width="26" height="26" rx="4" fill="#04c75b"/>
+  <text x="1337" y="198" font-size="14" font-weight="bold" fill="#ffffff">N</text>
+  <text x="1365" y="194" font-size="13" font-weight="bold" fill="#0f172a">NAVER Maps</text>
+  <text x="1365" y="208" font-size="10" fill="#16a34a">JavaScript API v3</text>
+  <text x="1330" y="235" font-size="10.5" fill="#334155">• 웹 지도 표시 및 렌더링</text>
+  <text x="1330" y="255" font-size="10.5" fill="#334155">• 마커 / 도달 권역 폴리곤 표출</text>
+  <text x="1330" y="275" font-size="10.5" fill="#334155">• 에이전트 밀집 히트맵 시각화</text>
+  <text x="1330" y="295" font-size="10.5" fill="#334155">• Geocoding 좌표 및 주소 변환</text>
+  <text x="1330" y="320" font-size="9.5" font-weight="bold" fill="#15803d">브라우저 직접 렌더링 방식</text>
+
+  <!-- TMAP API -->
+  <rect x="1315" y="365" width="235" height="175" rx="8" fill="#ffffff" stroke="#fca5a5" stroke-width="1.3"/>
+  <rect x="1330" y="380" width="26" height="26" rx="4" fill="#e11d48"/>
+  <text x="1337" y="398" font-size="14" font-weight="bold" fill="#ffffff">T</text>
+  <text x="1365" y="394" font-size="13" font-weight="bold" fill="#0f172a">TMAP API</text>
+  <text x="1365" y="408" font-size="10" fill="#e11d48">Pedestrian Route API</text>
+  <text x="1330" y="435" font-size="10.5" fill="#334155">• 우선 확인 거점 보행 경로 탐색</text>
+  <text x="1330" y="455" font-size="10.5" fill="#334155">• 실제 예상 이동 시간 산출</text>
+  <text x="1330" y="475" font-size="10.5" fill="#334155">• 보행 네트워크 경로 시각화</text>
+  <text x="1330" y="500" font-size="9.5" font-weight="bold" fill="#be185d">현장 수색 실효성 확보</text>
+
+  <!-- 외부 연동 안내 -->
+  <rect x="1315" y="555" width="235" height="170" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.2"/>
+  <text x="1330" y="580" font-size="11.5" font-weight="bold" fill="#1e40af">💡 외부 연동 트래픽 분리 원칙</text>
+  <text x="1330" y="605" font-size="10" fill="#334155">• 지도 타일 및 마커 시각화는</text>
+  <text x="1330" y="622" font-size="10" fill="#334155">  브라우저 SDK가 직접 통신하여</text>
+  <text x="1330" y="639" font-size="10" fill="#334155">  내부 백엔드 부하를 원천 방지</text>
+  <text x="1330" y="665" font-size="10" fill="#334155">• 주소 정제(Geocoding) 작업만</text>
+  <text x="1330" y="682" font-size="10" fill="#334155">  백엔드가 외부 API를 호출하여 보정</text>
+
+  <!-- ==================== [4. 하단 요청 흐름도 & 핵심 설계 포인트] ==================== -->
+  <rect x="35" y="770" width="890" height="215" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow-card)"/>
+  <text x="55" y="800" font-size="14" font-weight="bold" fill="#0f172a">🔄 요청 흐름도 (End-to-End Request Flow)</text>
+
+  <!-- 1. 사용자 -->
+  <rect x="55" y="820" width="120" height="135" rx="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="115" y="855" text-anchor="middle" font-size="20">👤</text>
+  <text x="115" y="880" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f172a">사용자</text>
+  <text x="115" y="898" text-anchor="middle" font-size="10" fill="#64748b">(수색자/보호자)</text>
+  <text x="115" y="918" text-anchor="middle" font-size="9.5" fill="#2563eb">웹 브라우저 접속</text>
+  <text x="115" y="934" text-anchor="middle" font-size="9" fill="#64748b">HTTPS /api/* 요청</text>
+
+  <line x1="175" y1="887" x2="205" y2="887" stroke="#0f172a" stroke-width="1.8" marker-end="url(#arr-dark)"/>
+  <text x="190" y="880" font-size="8.5" font-weight="bold" fill="#0f172a" text-anchor="middle">HTTPS</text>
+
+  <!-- 2. Frontend Nginx -->
+  <rect x="210" y="820" width="130" height="135" rx="7" fill="#f0fdf4" stroke="#86efac" stroke-width="1.2"/>
+  <text x="275" y="855" text-anchor="middle" font-size="20">🌐</text>
+  <text x="275" y="880" text-anchor="middle" font-size="12" font-weight="bold" fill="#15803d">Frontend</text>
+  <text x="275" y="898" text-anchor="middle" font-size="10" fill="#475569">Nginx : 80</text>
+  <text x="275" y="918" text-anchor="middle" font-size="9.5" fill="#16a34a">정적 파일 서빙</text>
+  <text x="275" y="934" text-anchor="middle" font-size="9" fill="#15803d">/api/* 리버스 프록시</text>
+
+  <line x1="340" y1="887" x2="370" y2="887" stroke="#16a34a" stroke-width="1.8" marker-end="url(#arr-green)"/>
+  <text x="355" y="880" font-size="8.5" font-weight="bold" fill="#16a34a" text-anchor="middle">/api/*</text>
+
+  <!-- 3. Backend Spring Boot -->
+  <rect x="375" y="820" width="135" height="135" rx="7" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2"/>
+  <text x="442" y="855" text-anchor="middle" font-size="20">⚙️</text>
+  <text x="442" y="880" text-anchor="middle" font-size="12" font-weight="bold" fill="#1d4ed8">Backend</text>
+  <text x="442" y="898" text-anchor="middle" font-size="10" fill="#475569">Spring Boot : 8080</text>
+  <text x="442" y="918" text-anchor="middle" font-size="9.5" fill="#2563eb">검증 / 비즈니스 로직</text>
+  <text x="442" y="934" text-anchor="middle" font-size="9" fill="#1e40af">AI 요청 및 DB 연동</text>
+
+  <line x1="510" y1="887" x2="540" y2="887" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arr-blue)"/>
+  <text x="525" y="880" font-size="8.5" font-weight="bold" fill="#2563eb" text-anchor="middle">REST</text>
+
+  <!-- 4. AI Server FastAPI -->
+  <rect x="545" y="820" width="135" height="135" rx="7" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.2"/>
+  <text x="612" y="855" text-anchor="middle" font-size="20">🧠</text>
+  <text x="612" y="880" text-anchor="middle" font-size="12" font-weight="bold" fill="#7e22ce">AI Server</text>
+  <text x="612" y="898" text-anchor="middle" font-size="10" fill="#475569">FastAPI : 8000</text>
+  <text x="612" y="918" text-anchor="middle" font-size="9.5" fill="#9333ea">Isochrone 도달권역</text>
+  <text x="612" y="934" text-anchor="middle" font-size="9" fill="#7e22ce">우선 POI 랭킹 산출</text>
+
+  <line x1="680" y1="887" x2="710" y2="887" stroke="#9333ea" stroke-width="1.8" marker-end="url(#arr-purple)"/>
+  <text x="695" y="880" font-size="8.5" font-weight="bold" fill="#9333ea" text-anchor="middle">결과 반환</text>
+
+  <!-- 5. Amazon RDS -->
+  <rect x="715" y="820" width="130" height="135" rx="7" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="780" y="855" text-anchor="middle" font-size="20">💾</text>
+  <text x="780" y="880" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f172a">Amazon RDS</text>
+  <text x="780" y="898" text-anchor="middle" font-size="10" fill="#475569">MySQL : 3306</text>
+  <text x="780" y="918" text-anchor="middle" font-size="9.5" fill="#7c3aed">수색 세션 영구 저장</text>
+  <text x="780" y="934" text-anchor="middle" font-size="9" fill="#475569">자동 백업 관리</text>
+
+  <!-- 주요 설계 포인트 (우측 하단) -->
+  <rect x="940" y="770" width="625" height="215" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5" filter="url(#shadow-card)"/>
+  <text x="960" y="800" font-size="14" font-weight="bold" fill="#1e40af">✅ 주요 설계 포인트 (Architecture Decisions - v2 반영 완료)</text>
+
+  <text x="960" y="830" font-size="11" font-weight="bold" fill="#1d4ed8">1. 프론트엔드 배포 일원화</text>
+  <text x="1115" y="830" font-size="11" fill="#1e293b">: S3 호스팅 대신 단일 EC2 내 Docker Nginx(:80)로 함께 패키징 및 배포</text>
+
+  <text x="960" y="858" font-size="11" font-weight="bold" fill="#16a34a">2. S3 버킷 역할 재정립</text>
+  <text x="1115" y="858" font-size="11" fill="#1e293b">: goldenstep-model-assets 버킷에 네트워크 그래프·POI 대용량 모델 에셋 보관</text>
+
+  <text x="960" y="886" font-size="11" font-weight="bold" fill="#2563eb">3. Docker 환경 명칭 부여</text>
+  <text x="1115" y="886" font-size="11" fill="#1e293b">: goldenstep-bridge-net 네트워크 및 goldenstep-app-stack 컴포즈 스택 확정</text>
+
+  <text x="960" y="914" font-size="11" font-weight="bold" fill="#9333ea">4. 네트워크 및 보안 완벽 격리</text>
+  <text x="1115" y="914" font-size="11" fill="#1e293b">: Nginx 80/443만 유일하게 노출, RDS(:3306)는 Private 서브넷에 완벽 격리</text>
+
+  <text x="960" y="942" font-size="11" font-weight="bold" fill="#be185d">5. 확장성 확보 (ECS 로드맵)</text>
+  <text x="1115" y="942" font-size="11" fill="#1e293b">: 완벽한 컨테이너 모듈화로 향후 트래픽 증가 시 ECS Fargate 클러스터 즉시 전환 가능</text>
+</svg>

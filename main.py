@@ -5,8 +5,7 @@ main.py
 - FastAPI Lifespan을 통한 도로망(Graph) 및 POI R-Tree 인메모리 사전 적재 (SLA < 0.5초)
 - [연동 완료]
     1. 시뮬레이터 실행 결과에서 stopped_points 추출 후 POI 랭커로 전달
-    2. 거점별 100m, 300m, 500m 존재 확률 및 95% 신뢰도 오차범위 DTO 조립
-    3. 네이버/카카오 지도 도보 길찾기 외부 딥링크 및 추천 사유 연계
+    2. 거점별 100m, 300m, 500m 존재 확률 DTO 조립
 - [성능 최적화] API 실시간 서빙 모드 적용 (exact_union=False, return_polygon=False, 방문 빈도 맵 재사용)
 """
 
@@ -30,12 +29,8 @@ from api.schemas import (
     GeoJSONGeometry,
     PriorityPoint,
     POILocation,
-    DeepLinks,
     ProbabilityAnalysis,
-    RangeProbabilities,
-    ConfidenceStats,
-    HighProbabilityEdgesCollection,
-    HighProbabilityEdgeFeature
+    RangeProbabilities
 )
 from core.graph_loader import WalkGraphManager
 from core.isochrone_engine import IsochroneEngine
@@ -130,8 +125,7 @@ def predict_simulation(request: SearchSimulationRequest):
     1. 보행 네트워크 기반 도달 권역(A1/A2 Isochrone Polygon) 산출
     2. 몬테카를로 에이전트 2,000명 시뮬레이션 및 실제 이동 궤적(A3) 도로망 추출
     3. 통과 궤적 밀도와 공간 인접도를 결합하여 권역 내부 유력 거점 TOP 3 선별
-    4. 거점 기준 반경별(100m, 300m, 500m) 존재 확률 및 95% 신뢰구간 표본 오차 산출
-    5. 거점 중심 300m 회랑 및 네이버/카카오 지도 도보 길찾기 외부 딥링크 생성
+    4. 거점 기준 반경별(100m, 300m, 500m) 존재 확률 산출
     """
     start_perf = time.perf_counter()
     
@@ -159,7 +153,6 @@ def predict_simulation(request: SearchSimulationRequest):
 
         # -------------------------------------------------------------
         # 1. 보행 도로망 도달 권역(A1/A2 Isochrone) 계산
-        # exact_union=False 로 호출하여 무거운 unary_union 병합 생략 (0.01초 내 반환)
         # -------------------------------------------------------------
         iso_feature = iso_engine.calculate_isochrone(
             center_lat=lat, 
@@ -173,7 +166,6 @@ def predict_simulation(request: SearchSimulationRequest):
 
         # -------------------------------------------------------------
         # 2. 몬테카를로 시뮬레이션 선행 실행 (에이전트 통과 도로망 A3 및 최종 정지점 추출)
-        # return_polygon=False 로 호출하여 API 응답에 쓰이지 않는 A3 unary_union 생략
         # -------------------------------------------------------------
         sim_result = simulator.simulate(
             center_lat=lat,
@@ -187,7 +179,6 @@ def predict_simulation(request: SearchSimulationRequest):
             return_polygon=False
         )
         edge_visit_counts = sim_result.get("edge_visit_counts", {})
-        agents = sim_result.get("agents", [])
         stopped_points = sim_result.get("stopped_points", [])
 
         # -------------------------------------------------------------
@@ -205,34 +196,7 @@ def predict_simulation(request: SearchSimulationRequest):
         )
 
         # -------------------------------------------------------------
-        # 4. 거점 중심 300m 유입 경로(회랑) 추출
-        # edge_popularity에 이미 계산된 edge_visit_counts를 넘겨 중복 이중 루프 제거
-        # -------------------------------------------------------------
-        raw_edges_geojson = simulator.extract_poi_corridors(
-            agents=agents,
-            top_pois=raw_pois,
-            radius_m=300.0,
-            edge_popularity=edge_visit_counts
-        )
-        
-        edge_feature_list = []
-        for feat in raw_edges_geojson.get("features", []):
-            edge_feature_list.append(
-                HighProbabilityEdgeFeature(
-                    properties=feat.get("properties", {}),
-                    geometry=GeoJSONGeometry(
-                        type=feat["geometry"]["type"],
-                        coordinates=feat["geometry"]["coordinates"]
-                    )
-                )
-            )
-        edges_collection = HighProbabilityEdgesCollection(
-            type="FeatureCollection",
-            features=edge_feature_list
-        )
-
-        # -------------------------------------------------------------
-        # 5. PriorityPoint DTO 조립 (확률 및 신뢰도 매핑)
+        # 4. PriorityPoint DTO 조립 (백엔드 txt 규격: confidence, deep_links 제외)
         # -------------------------------------------------------------
         priority_point_list = []
         for p in raw_pois:
@@ -245,12 +209,6 @@ def predict_simulation(request: SearchSimulationRequest):
                         within_100m=pa_raw["range_probabilities"]["within_100m"],
                         within_300m=pa_raw["range_probabilities"]["within_300m"],
                         within_500m=pa_raw["range_probabilities"]["within_500m"]
-                    ),
-                    confidence=ConfidenceStats(
-                        confidence_level=pa_raw["confidence"]["confidence_level"],
-                        margin_of_error_pct=pa_raw["confidence"]["margin_of_error_pct"],
-                        dispersion_grade=pa_raw["confidence"]["dispersion_grade"],
-                        sample_size=pa_raw["confidence"]["sample_size"]
                     )
                 )
 
@@ -264,16 +222,12 @@ def predict_simulation(request: SearchSimulationRequest):
                     distance_m=p.get("distance_m"),
                     score=p["score"],
                     probability_analysis=pa_dto,
-                    recommendation_reason=p["recommendation_reason"],
-                    deep_links=DeepLinks(
-                        naver_map=p["deep_links"]["naver_map"],
-                        kakao_map=p["deep_links"]["kakao_map"]
-                    )
+                    recommendation_reason=p["recommendation_reason"]
                 )
             )
 
         # -------------------------------------------------------------
-        # 6. 신뢰도 등급 산정
+        # 5. 신뢰도 등급 산정
         # -------------------------------------------------------------
         if raw_elapsed_h <= 1.5:
             reliability = "STABLE"
@@ -286,20 +240,18 @@ def predict_simulation(request: SearchSimulationRequest):
             warning_msg = "실종 후 3시간 이상 경과하여 보행 예측 신뢰도가 낮습니다. 112 긴급 신고를 병행하십시오."
 
         # -------------------------------------------------------------
-        # 7. 요약 통계(Summary) 생성
+        # 6. 요약 통계(Summary) 생성 (백엔드 txt 규격: base_velocity_kmh, max_distance_m 제외)
         # -------------------------------------------------------------
         summary = SimulationSummary(
             person_type=mp.person_type,
-            base_velocity_kmh=base_speed,
             elapsed_hours=raw_elapsed_h,
-            max_distance_m=iso_props["cutoff_distance_m"],
             reliability_status=reliability,
             reliability_warning=warning_msg,
             area_reduction_rate=float(str(iso_props["area_reduction_rate_a2"]).replace("%", ""))
         )
 
         # -------------------------------------------------------------
-        # 8. FeatureCollection 래핑
+        # 7. FeatureCollection 래핑
         # -------------------------------------------------------------
         boundary_collection = BoundaryZoneCollection(
             features=[
@@ -315,6 +267,9 @@ def predict_simulation(request: SearchSimulationRequest):
 
         exec_time = round(time.perf_counter() - start_perf, 3)
 
+        # -------------------------------------------------------------
+        # 8. 최종 반환 (백엔드 txt 규격: high_probability_edges 제외)
+        # -------------------------------------------------------------
         return SearchSimulationResponse(
             status="SUCCESS",
             request_id=request.request_id,
@@ -322,8 +277,7 @@ def predict_simulation(request: SearchSimulationRequest):
             execution_time_sec=exec_time,
             summary=summary,
             boundary_zone=boundary_collection,
-            priority_points=priority_point_list,
-            high_probability_edges=edges_collection
+            priority_points=priority_point_list
         )
 
     except Exception as e:
